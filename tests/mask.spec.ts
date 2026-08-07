@@ -16,11 +16,13 @@ describe('normalizeWireConfig', () => {
   })
 
   it('accepts well-typed fields and ignores mistyped ones', () => {
-    const parsed = normalizeWireConfig({ enabled: false, productName: 42 })
+    const parsed = normalizeWireConfig({ enabled: false, productName: 42, wordmark: 7 })
     expect(parsed.enabled).toBe(false)
     expect(parsed.productName).toBe('Harness')
+    expect(parsed.wordmark).toBe('opencode')
     expect(normalizeWireConfig({ enabled: 'yes' }).enabled).toBe(true)
     expect(normalizeWireConfig({ productName: '' }).productName).toBe('Harness')
+    expect(normalizeWireConfig({ wordmark: '' }).wordmark).toBe('opencode')
   })
 
   it('tolerates a payload serialized by an older host half (extra fields)', () => {
@@ -32,7 +34,7 @@ describe('normalizeWireConfig', () => {
       models: { 'DeepSeek-V4-Flash': 'V4-Flash' },
       extra: {},
     }
-    expect(normalizeWireConfig(oldShape)).toEqual({ enabled: true, productName: 'Harness' })
+    expect(normalizeWireConfig(oldShape)).toEqual({ enabled: true, productName: 'Harness', wordmark: 'opencode' })
   })
 })
 

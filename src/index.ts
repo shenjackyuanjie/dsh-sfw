@@ -23,10 +23,11 @@ export const name = 'dsh-sfw'
 /** Services required before mounting the index tap. */
 export const inject = ['httpServer']
 
-/** Plugin config: the product-name replacement (see {@link SfwConfig}). */
+/** Plugin config: the branding replacements (see {@link SfwConfig}). */
 export const Config: z<SfwConfig> = z.object({
   enabled: z.boolean().default(true),
   productName: z.string().default('Harness'),
+  wordmark: z.string().default('opencode'),
 })
 
 /** The httpServer seam surface this plugin uses (structural — no package import). */

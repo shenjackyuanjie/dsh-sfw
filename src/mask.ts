@@ -5,9 +5,9 @@
  * browser half reads that wire payload (falling back to these same defaults).
  *
  * Scope: the plugin only replaces the product branding — the top-left brand
- * wordmark (letterforms + HARNESS badge) and the browser tab title. All other
- * UI copy (model selector, provider names, settings, message content) is left
- * untouched.
+ * wordmark svg (replaced with the `wordmark` lettering) and the browser tab
+ * title. All other UI copy (model selector, provider names, settings,
+ * message content) is left untouched.
  * @module dsh-sfw/mask
  */
 
@@ -15,13 +15,15 @@
 export interface SfwConfig {
   /** Master switch; false disables every masking surface. */
   enabled: boolean
-  /** Replacement product name: the tab title and the injected wordmark text. */
+  /** Replacement product name for the browser tab title. */
   productName: string
+  /** Replacement wordmark lettering shown in place of the brand svg. */
+  wordmark: string
 }
 
 /** The defaults both halves fall back to when configuration is absent. */
 export function defaultConfig(): SfwConfig {
-  return { enabled: true, productName: 'Harness' }
+  return { enabled: true, productName: 'Harness', wordmark: 'opencode' }
 }
 
 /**
@@ -41,6 +43,9 @@ export function normalizeWireConfig(wire: unknown): SfwConfig {
     productName: typeof record.productName === 'string' && record.productName !== ''
       ? record.productName
       : base.productName,
+    wordmark: typeof record.wordmark === 'string' && record.wordmark !== ''
+      ? record.wordmark
+      : base.wordmark,
   }
 }
 

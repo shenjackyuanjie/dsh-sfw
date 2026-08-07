@@ -39,7 +39,7 @@ export function apply(ctx: Context): void {
   if (!config.enabled) return
   const mask = (text: string): string => maskProductName(text, config.productName)
   const stopTitle = patchTitle(mask)
-  const stopWordmark = startWordmarkMasking(config.productName)
+  const stopWordmark = startWordmarkMasking(config.wordmark)
   ctx.effect(() => () => {
     stopTitle()
     stopWordmark()

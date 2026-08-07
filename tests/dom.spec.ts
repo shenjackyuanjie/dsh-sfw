@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
  * Browser-half DOM engine tests: the brand wordmark replacement (including
- * the descendant-svg scan), the title setter shadow, and the guarantee that
- * ordinary UI copy is left untouched.
+ * the descendant-svg scan and the button-functionality guarantee), the title
+ * setter shadow, and the guarantee that ordinary UI copy is left untouched.
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import { defaultConfig, maskProductName } from '../src/mask.ts'
 import { patchTitle, patchWordmark, startWordmarkMasking } from '../src/client/dom.ts'
 
-const PRODUCT_NAME = defaultConfig().productName
+const WORDMARK = defaultConfig().wordmark
 
 function wordmarkSvg(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -39,51 +39,68 @@ afterEach(() => {
 })
 
 describe('patchWordmark', () => {
-  it('masks the letterforms and badge plate but keeps the whale glyph', () => {
+  it('removes the entire original svg content (whale, letterforms, badge)', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, PRODUCT_NAME)
-    expect(svg.querySelector('#whale')?.getAttribute('fill')).toBe('currentColor')
-    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
-    expect(svg.querySelector('#letter-b')?.getAttribute('fill')).toBe('transparent')
-    expect(svg.querySelector('#badge-plate')?.getAttribute('fill')).toBe('transparent')
-    expect(svg.querySelector('#badge-letter')?.getAttribute('fill')).toBe('transparent')
+    patchWordmark(svg, WORDMARK)
+    expect(svg.querySelector('#whale')).toBeNull()
+    expect(svg.querySelector('#letter-a')).toBeNull()
+    expect(svg.querySelector('#badge-plate')).toBeNull()
+    expect(svg.querySelectorAll('path')).toHaveLength(0)
+    expect(svg.querySelectorAll('rect')).toHaveLength(0)
+    expect(svg.querySelectorAll('g')).toHaveLength(0)
   })
 
-  it('appends the neutral product-name text next to the whale', () => {
+  it('injects the centered wordmark lettering', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, 'InnerAI')
-    const text = svg.querySelector('text[data-dsh-sfw-text]')
-    expect(text?.textContent).toBe('InnerAI')
-    expect(text?.getAttribute('x')).toBe('30')
+    patchWordmark(svg, 'opencode')
+    const text = svg.querySelector('text[data-dsh-sfw-wordmark]')
+    expect(text?.textContent).toBe('opencode')
+    expect(text?.getAttribute('x')).toBe('91')
+    expect(text?.getAttribute('text-anchor')).toBe('middle')
+    expect(text?.getAttribute('font-size')).toBe('14')
     expect(text?.getAttribute('fill')).toBe('currentColor')
+  })
+
+  it('keeps the svg element itself (button sizing and clicks survive)', () => {
+    const svg = wordmarkSvg()
+    svg.setAttribute('width', '182')
+    svg.setAttribute('height', '24')
+    const button = document.createElement('button')
+    button.setAttribute('aria-label', '新会话')
+    button.appendChild(svg)
+    patchWordmark(svg, WORDMARK)
+    expect(button.querySelector('svg')).toBe(svg)
+    expect(svg.getAttribute('width')).toBe('182')
+    expect(svg.getAttribute('height')).toBe('24')
+    expect(button.getAttribute('aria-label')).toBe('新会话')
   })
 
   it('is idempotent (single text, no double patching)', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, PRODUCT_NAME)
-    patchWordmark(svg, PRODUCT_NAME)
-    expect(svg.querySelectorAll('[data-dsh-sfw-text]')).toHaveLength(1)
-    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
+    patchWordmark(svg, WORDMARK)
+    patchWordmark(svg, WORDMARK)
+    expect(svg.querySelectorAll('[data-dsh-sfw-wordmark]')).toHaveLength(1)
+    expect(svg.children).toHaveLength(1)
   })
 
-  it('skips text injection for an empty product name but still masks the letters', () => {
+  it('clears the svg without injecting text for an empty wordmark', () => {
     const svg = wordmarkSvg()
     patchWordmark(svg, '')
-    expect(svg.querySelector('[data-dsh-sfw-text]')).toBeNull()
-    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
+    expect(svg.children).toHaveLength(0)
+    expect(svg.querySelector('[data-dsh-sfw-wordmark]')).toBeNull()
   })
 
   it('is a no-op on svgs without the whale clip', () => {
     const other = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     other.innerHTML = '<path d="M1 1 Z" fill="currentColor"/>'
-    patchWordmark(other, PRODUCT_NAME)
+    patchWordmark(other, WORDMARK)
     expect(other.querySelector('path')?.getAttribute('fill')).toBe('currentColor')
   })
 })
 
 describe('startWordmarkMasking', () => {
   it('patches wordmarks added as descendants of a large subtree', async () => {
-    const stop = startWordmarkMasking(PRODUCT_NAME)
+    const stop = startWordmarkMasking(WORDMARK)
     // React-style mount: the whole UI arrives as ONE added subtree; the svg
     // is a descendant, never the added node itself (regression guard).
     const root = document.createElement('div')
@@ -92,27 +109,26 @@ describe('startWordmarkMasking', () => {
     document.body.appendChild(root)
     await flush()
     const svg = root.querySelector('svg') as SVGSVGElement
-    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
-    expect(svg.querySelector('#whale')?.getAttribute('fill')).toBe('currentColor')
-    expect(svg.querySelector('[data-dsh-sfw-text]')?.textContent).toBe(PRODUCT_NAME)
+    expect(svg.querySelectorAll('path')).toHaveLength(0)
+    expect(svg.querySelector('text[data-dsh-sfw-wordmark]')?.textContent).toBe(WORDMARK)
     stop()
   })
 
   it('re-patches a freshly remounted wordmark', async () => {
-    const stop = startWordmarkMasking(PRODUCT_NAME)
+    const stop = startWordmarkMasking(WORDMARK)
     document.body.appendChild(wordmarkSvg())
     await flush()
     document.body.innerHTML = ''
     document.body.appendChild(wordmarkSvg())
     await flush()
     const svg = document.querySelector('svg') as SVGSVGElement
-    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
-    expect(svg.querySelectorAll('[data-dsh-sfw-text]')).toHaveLength(1)
+    expect(svg.querySelectorAll('path')).toHaveLength(0)
+    expect(svg.querySelectorAll('[data-dsh-sfw-wordmark]')).toHaveLength(1)
     stop()
   })
 
   it('leaves ordinary UI text and attributes untouched', async () => {
-    const stop = startWordmarkMasking(PRODUCT_NAME)
+    const stop = startWordmarkMasking(WORDMARK)
     document.body.innerHTML = `
       <button aria-label="选择模型，当前 DeepSeek-V4-Flash，推理等级 High">
         DeepSeek-V4-Flash
@@ -130,7 +146,7 @@ describe('startWordmarkMasking', () => {
 })
 
 describe('patchTitle', () => {
-  const mask = (text: string): string => maskProductName(text, PRODUCT_NAME)
+  const mask = (text: string): string => maskProductName(text, 'Harness')
 
   it('masks the initial title and every later assignment', () => {
     document.title = 'DeepSeek Harness'
