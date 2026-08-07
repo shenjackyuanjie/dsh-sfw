@@ -14,7 +14,7 @@
 import type { Context } from 'cordis'
 import z from 'schemastery'
 import {
-  buildRules, defaultConfig, maskString, serializeConfig, type SfwConfig,
+  defaultConfig, maskProductName, type SfwConfig,
 } from './mask.ts'
 
 /** Stable cordis plugin name (also the web boot graph entry id). */
@@ -23,14 +23,10 @@ export const name = 'dsh-sfw'
 /** Services required before mounting the index tap. */
 export const inject = ['httpServer']
 
-/** Plugin config: the masking vocabulary (see {@link SfwConfig}). */
+/** Plugin config: the product-name replacement (see {@link SfwConfig}). */
 export const Config: z<SfwConfig> = z.object({
   enabled: z.boolean().default(true),
   productName: z.string().default('Harness'),
-  providerName: z.string().default('DS'),
-  providerId: z.string().default('ds-official'),
-  models: z.dict(z.string()).default({}),
-  extra: z.dict(z.string()).default({}),
 })
 
 /** The httpServer seam surface this plugin uses (structural — no package import). */
@@ -55,10 +51,10 @@ function escapeForScript(payload: string): string {
 export function transformIndex(html: string, config: SfwConfig): string {
   let out = html
   out = out.replace(/<title\b[^>]*>([\s\S]*?)<\/title>/i, (whole, inner: string) => {
-    const maskedInner = maskString(inner, buildRules(config))
+    const maskedInner = maskProductName(inner, config.productName)
     return maskedInner === inner ? whole : whole.replace(inner, maskedInner)
   })
-  const payload = escapeForScript(JSON.stringify(serializeConfig(config)))
+  const payload = escapeForScript(JSON.stringify(config))
   const script = `<script>window.__DSH_SFW__ = ${payload}</script>`
   const head = out.indexOf('<head>')
   if (head !== -1) return `${out.slice(0, head + 6)}${script}${out.slice(head + 6)}`
@@ -72,7 +68,7 @@ export function transformIndex(html: string, config: SfwConfig): string {
  * @param config - resolved plugin config (schema defaults applied).
  */
 export function apply(ctx: Context, config?: SfwConfig): void {
-  const resolved = { ...defaultConfig(), ...config, models: { ...config?.models } }
+  const resolved = { ...defaultConfig(), ...config }
   if (!resolved.enabled) return
   const httpServer = (ctx as unknown as { httpServer?: HttpServerSeam }).httpServer
   if (httpServer === undefined) {

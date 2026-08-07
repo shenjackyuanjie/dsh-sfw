@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 /**
- * Browser-half DOM engine tests: text-node/attribute rewriting, editing
- * protection, the title setter shadow, and the brand wordmark path patch.
+ * Browser-half DOM engine tests: the brand wordmark replacement (including
+ * the descendant-svg scan), the title setter shadow, and the guarantee that
+ * ordinary UI copy is left untouched.
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildRules, defaultConfig, maskString } from '../src/mask.ts'
-import { patchTitle, patchWordmark, startDomMasking } from '../src/client/dom.ts'
+import { defaultConfig, maskProductName } from '../src/mask.ts'
+import { patchTitle, patchWordmark, startWordmarkMasking } from '../src/client/dom.ts'
 
-const rules = buildRules(defaultConfig())
-const mask = (text: string): string => maskString(text, rules)
-
-/** Flush pending MutationObserver microtasks (jsdom delivers them async). */
-const flush = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
+const PRODUCT_NAME = defaultConfig().productName
 
 function wordmarkSvg(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -33,98 +30,18 @@ function wordmarkSvg(): SVGSVGElement {
   return svg
 }
 
+/** Flush pending MutationObserver microtasks (jsdom delivers them async). */
+const flush = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
+
 afterEach(() => {
   document.body.innerHTML = ''
   document.head.innerHTML = ''
 })
 
-describe('startDomMasking', () => {
-  it('masks existing and later-added text nodes', async () => {
-    document.body.innerHTML = '<div id="a">DeepSeek Harness</div>'
-    const stop = startDomMasking(mask)
-    // The initial sweep is synchronous.
-    expect(document.getElementById('a')?.textContent).toBe('Harness')
-
-    const added = document.createElement('div')
-    added.textContent = 'model DeepSeek-V4-Flash / deepseek-official'
-    document.body.appendChild(added)
-    await flush()
-    expect(added.textContent).toBe('model V4-Flash / ds-official')
-    stop()
-  })
-
-  it('masks display attributes on added elements', async () => {
-    const stop = startDomMasking(mask)
-    const button = document.createElement('button')
-    button.setAttribute('aria-label', '选择模型，当前 DeepSeek-V4-Flash')
-    button.setAttribute('title', 'DeepSeek Harness')
-    button.setAttribute('placeholder', 'deepseek-v4-pro')
-    button.setAttribute('href', 'https://www.deepseek.com')
-    document.body.appendChild(button)
-    await flush()
-    expect(button.getAttribute('aria-label')).toBe('选择模型，当前 V4-Flash')
-    expect(button.getAttribute('title')).toBe('Harness')
-    expect(button.getAttribute('placeholder')).toBe('v4-pro')
-    // URL attributes are never rewritten.
-    expect(button.getAttribute('href')).toBe('https://www.deepseek.com')
-    stop()
-  })
-
-  it('never rewrites text inside an element the user is editing', () => {
-    const stop = startDomMasking(mask)
-    const editable = document.createElement('div')
-    editable.contentEditable = 'true'
-    editable.textContent = 'about DeepSeek'
-    document.body.appendChild(editable)
-    editable.focus()
-    expect(editable.textContent).toBe('about DeepSeek')
-    stop()
-  })
-
-  it('leaves textarea and script content alone', () => {
-    const stop = startDomMasking(mask)
-    const textarea = document.createElement('textarea')
-    textarea.textContent = 'deepseek notes'
-    document.body.appendChild(textarea)
-    const script = document.createElement('script')
-    script.textContent = 'const x = "DeepSeek Harness"'
-    document.body.appendChild(script)
-    expect(textarea.textContent).toBe('deepseek notes')
-    expect(script.textContent).toBe('const x = "DeepSeek Harness"')
-    stop()
-  })
-
-  it('masks characterData mutations (in-place text rewrites)', async () => {
-    const stop = startDomMasking(mask)
-    const node = document.createElement('div')
-    document.body.appendChild(node)
-    const text = document.createTextNode('DeepSeek')
-    node.appendChild(text)
-    await flush()
-    expect(text.nodeValue).toBe('DS')
-    // A later in-place rewrite (React-style) gets masked too.
-    text.nodeValue = 'DeepSeek-V4-Flash'
-    await flush()
-    expect(text.nodeValue).toBe('V4-Flash')
-    stop()
-  })
-
-  it('keeps converging without looping when masked text is written back', async () => {
-    const stop = startDomMasking(mask)
-    const node = document.createElement('div')
-    node.textContent = 'DeepSeek Harness'
-    document.body.appendChild(node)
-    await flush()
-    // The observer's own write lands back in the DOM; a second pass must not change it.
-    expect(node.textContent).toBe('Harness')
-    stop()
-  })
-})
-
 describe('patchWordmark', () => {
   it('masks the letterforms and badge plate but keeps the whale glyph', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg)
+    patchWordmark(svg, PRODUCT_NAME)
     expect(svg.querySelector('#whale')?.getAttribute('fill')).toBe('currentColor')
     expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
     expect(svg.querySelector('#letter-b')?.getAttribute('fill')).toBe('transparent')
@@ -132,25 +49,89 @@ describe('patchWordmark', () => {
     expect(svg.querySelector('#badge-letter')?.getAttribute('fill')).toBe('transparent')
   })
 
+  it('appends the neutral product-name text next to the whale', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, 'InnerAI')
+    const text = svg.querySelector('text[data-dsh-sfw-text]')
+    expect(text?.textContent).toBe('InnerAI')
+    expect(text?.getAttribute('x')).toBe('30')
+    expect(text?.getAttribute('fill')).toBe('currentColor')
+  })
+
+  it('is idempotent (single text, no double patching)', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, PRODUCT_NAME)
+    patchWordmark(svg, PRODUCT_NAME)
+    expect(svg.querySelectorAll('[data-dsh-sfw-text]')).toHaveLength(1)
+    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
+  })
+
+  it('skips text injection for an empty product name but still masks the letters', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, '')
+    expect(svg.querySelector('[data-dsh-sfw-text]')).toBeNull()
+    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
+  })
+
   it('is a no-op on svgs without the whale clip', () => {
     const other = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     other.innerHTML = '<path d="M1 1 Z" fill="currentColor"/>'
-    patchWordmark(other)
+    patchWordmark(other, PRODUCT_NAME)
     expect(other.querySelector('path')?.getAttribute('fill')).toBe('currentColor')
   })
+})
 
-  it('patches wordmarks added to the live document', async () => {
-    const stop = startDomMasking(mask)
+describe('startWordmarkMasking', () => {
+  it('patches wordmarks added as descendants of a large subtree', async () => {
+    const stop = startWordmarkMasking(PRODUCT_NAME)
+    // React-style mount: the whole UI arrives as ONE added subtree; the svg
+    // is a descendant, never the added node itself (regression guard).
+    const root = document.createElement('div')
+    root.innerHTML = '<section><button><svg></svg></button></section>'
+    root.querySelector('svg')?.replaceWith(wordmarkSvg())
+    document.body.appendChild(root)
+    await flush()
+    const svg = root.querySelector('svg') as SVGSVGElement
+    expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
+    expect(svg.querySelector('#whale')?.getAttribute('fill')).toBe('currentColor')
+    expect(svg.querySelector('[data-dsh-sfw-text]')?.textContent).toBe(PRODUCT_NAME)
+    stop()
+  })
+
+  it('re-patches a freshly remounted wordmark', async () => {
+    const stop = startWordmarkMasking(PRODUCT_NAME)
+    document.body.appendChild(wordmarkSvg())
+    await flush()
+    document.body.innerHTML = ''
     document.body.appendChild(wordmarkSvg())
     await flush()
     const svg = document.querySelector('svg') as SVGSVGElement
     expect(svg.querySelector('#letter-a')?.getAttribute('fill')).toBe('transparent')
-    expect(svg.querySelector('#whale')?.getAttribute('fill')).toBe('currentColor')
+    expect(svg.querySelectorAll('[data-dsh-sfw-text]')).toHaveLength(1)
+    stop()
+  })
+
+  it('leaves ordinary UI text and attributes untouched', async () => {
+    const stop = startWordmarkMasking(PRODUCT_NAME)
+    document.body.innerHTML = `
+      <button aria-label="选择模型，当前 DeepSeek-V4-Flash，推理等级 High">
+        DeepSeek-V4-Flash
+      </button>
+      <div>Provider: DeepSeek (deepseek-official)</div>
+      <input placeholder="deepseek-v4-pro" />
+    `
+    await flush()
+    expect(document.body.textContent).toContain('DeepSeek-V4-Flash')
+    expect(document.body.textContent).toContain('DeepSeek (deepseek-official)')
+    expect(document.querySelector('button')?.getAttribute('aria-label')).toBe('选择模型，当前 DeepSeek-V4-Flash，推理等级 High')
+    expect(document.querySelector('input')?.getAttribute('placeholder')).toBe('deepseek-v4-pro')
     stop()
   })
 })
 
 describe('patchTitle', () => {
+  const mask = (text: string): string => maskProductName(text, PRODUCT_NAME)
+
   it('masks the initial title and every later assignment', () => {
     document.title = 'DeepSeek Harness'
     const stop = patchTitle(mask)

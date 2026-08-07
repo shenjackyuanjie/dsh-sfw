@@ -1,10 +1,10 @@
 /**
  * Host-half tests: the index.html transform (title rewrite + config script
- * injection) and the apply-time wiring contract.
+ * injection).
  */
 import { describe, expect, it } from 'vitest'
 import { transformIndex } from '../src/index.ts'
-import { defaultConfig, serializeConfig } from '../src/mask.ts'
+import { defaultConfig } from '../src/mask.ts'
 
 const SAMPLE_HTML = `<!doctype html>
 <html lang="zh-CN">
@@ -36,6 +36,13 @@ describe('transformIndex', () => {
     expect(injectedAt).toBeLessThan(headEnd)
   })
 
+  it('serializes only the enabled/productName fields', () => {
+    const masked = transformIndex(SAMPLE_HTML, defaultConfig())
+    expect(masked).toContain('"enabled":true,"productName":"Harness"')
+    expect(masked).not.toContain('providerName')
+    expect(masked).not.toContain('DeepSeek-V4-Flash')
+  })
+
   it('escapes < in the payload so config strings cannot break out of the script element', () => {
     const config = { ...defaultConfig(), productName: 'A<B>Company' }
     const masked = transformIndex('<html><head></head><body></body></html>', config)
@@ -46,18 +53,8 @@ describe('transformIndex', () => {
     expect(payload).not.toContain('<')
   })
 
-  it('serializes the default model pairs into the payload', () => {
-    const masked = transformIndex(SAMPLE_HTML, defaultConfig())
-    expect(masked).toContain('"DeepSeek-V4-Flash":"V4-Flash"')
-    expect(masked).toContain('"deepseek-v4-pro":"v4-pro"')
-  })
-
   it('prepends the script when no <head> exists', () => {
     const masked = transformIndex('<html><body></body></html>', defaultConfig())
     expect(masked.startsWith('<script>window.__DSH_SFW__ =')).toBe(true)
-  })
-
-  it('serializes deterministically (stable payload for the same config)', () => {
-    expect(serializeConfig(defaultConfig())).toEqual(serializeConfig(defaultConfig()))
   })
 })

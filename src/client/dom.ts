@@ -1,58 +1,44 @@
 /**
- * Browser DOM masking engine: keeps every user-visible DeepSeek token out of
- * the live document. Three cooperating surfaces:
+ * Browser branding engine: replaces the DeepSeek Harness wordmark and masks
+ * the tab title. Nothing else in the document is touched — model selector,
+ * provider names, settings copy, and message content stay as-is.
  *
  * - `patchTitle` shadows the `document.title` setter so every assignment
  *   (including the shell's `"<session> — DeepSeek Harness"` projection) lands
  *   masked, then masks the initial value.
- * - `startDomMasking` runs a MutationObserver over the whole document: text
- *   nodes (React re-creates or re-writes them as content streams in), plus
- *   the display attributes aria-label/title/alt/placeholder on added
- *   elements. User input is never touched: text inside an element the user is
- *   editing (contenteditable or an active input/textarea subtree) is skipped.
- * - The sidebar/settings brand wordmark is an SVG whose letterforms are
- *   vector paths — invisible to text rewrites. `patchWordmark` sets those
- *   paths (and the badge plate) to `fill="transparent"` IN PLACE, which
- *   survives React re-renders because React only diffs props it knows and the
- *   component's props never change; the whale glyph keeps `currentColor`.
+ * - `startWordmarkMasking` runs a MutationObserver over the whole document
+ *   and patches every `BrandWordmark` svg (sidebar brand row, welcome notice,
+ *   onboarding dialog): the letterform paths and the HARNESS badge plate are
+ *   set to `fill="transparent"` IN PLACE — React only diffs props it knows,
+ *   and the component's props never change, so the writes survive re-renders
+ *   — and a neutral product-name `<text>` is appended next to the whale glyph
+ *   (appended children React does not manage stay put). The whale keeps
+ *   `currentColor`.
  *
- * Every mutation writes only when the masked value differs, so the observer
- * converges instead of looping.
+ * Wordmark detection needs the descendant scan: React mounts the whole UI as
+ * one subtree addition, so the svg is never the added node itself.
  * @module dsh-sfw/client/dom
  */
 
 /** The BrandWordmark clipPath id that identifies the wordmark svg (whale + letterforms + badge). */
 const WHALE_CLIP_ID = 'dsh-wordmark-whale-clip'
 
-/** Display attributes rewritten in place (never href/src/value/id/class/data-*). */
-const MASKED_ATTRIBUTES = ['aria-label', 'title', 'alt', 'placeholder'] as const
+/** Marker attribute on the injected replacement text (idempotence). */
+const TEXT_MARKER = 'data-dsh-sfw-text'
 
-/** Elements whose text must never be rewritten. */
-const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA'])
-
-/** Whether a node lives inside a subtree the user is actively editing. */
-function insideActiveEdit(node: Node): boolean {
-  const active = document.activeElement
-  if (active === null || active === document.body || active === document.documentElement) return false
-  return active.contains(node)
-}
-
-/** Whether an element's text content must stay untouched (script/style/textarea or being edited). */
-function skipElement(element: Element): boolean {
-  if (SKIP_TAGS.has(element.tagName)) return true
-  if ((element as HTMLElement).isContentEditable && document.activeElement?.contains(element)) return true
-  return false
-}
+/** The SVG namespace (createElementNS needs it). */
+const SVG_NS = 'http://www.w3.org/2000/svg'
 
 /**
- * Patch the brand wordmark svg in place: mask every path outside the whale
- * clip group plus every rect (the HARNESS badge plate), leaving the whale
- * glyph visible. Attribute writes survive React reconciliation (see module
- * comment).
+ * Replace one wordmark's branding in place: hide the letterform paths and
+ * every rect (the HARNESS badge plate), keep the whale glyph, and append the
+ * neutral product-name text.
  * @param svg - the wordmark svg element (identified by the whale clip id).
+ * @param productName - the replacement wordmark text.
  */
-export function patchWordmark(svg: SVGElement): void {
+export function patchWordmark(svg: SVGElement, productName: string): void {
   if (svg.querySelector(`#${WHALE_CLIP_ID}`) === null) return
+  if (svg.querySelector(`[${TEXT_MARKER}]`) !== null) return
   const whaleGroup = svg.querySelector(`g[clip-path*="${WHALE_CLIP_ID}"]`)
   for (const path of svg.querySelectorAll('path')) {
     if (whaleGroup !== null && whaleGroup.contains(path)) continue
@@ -61,72 +47,42 @@ export function patchWordmark(svg: SVGElement): void {
   for (const rect of svg.querySelectorAll('rect')) {
     rect.setAttribute('fill', 'transparent')
   }
+  if (productName === '') return
+  const text = document.createElementNS(SVG_NS, 'text')
+  text.setAttribute(TEXT_MARKER, 'true')
+  text.setAttribute('x', '30')
+  text.setAttribute('y', '16.4')
+  text.setAttribute('font-size', '13')
+  text.setAttribute('font-weight', '600')
+  text.setAttribute('letter-spacing', '0.4')
+  text.setAttribute('fill', 'currentColor')
+  text.textContent = productName
+  svg.appendChild(text)
 }
 
-/** Mask one element's display attributes in place. */
-function maskElement(element: Element, mask: (text: string) => string): void {
-  for (const attribute of MASKED_ATTRIBUTES) {
-    const current = element.getAttribute(attribute)
-    if (current === null) continue
-    const masked = mask(current)
-    if (masked !== current) element.setAttribute(attribute, masked)
+/** Patch every wordmark svg under a root (including the root itself). */
+function patchWordmarksUnder(root: Node, productName: string): void {
+  if (root instanceof SVGElement) patchWordmark(root, productName)
+  if (root instanceof Element) {
+    for (const svg of root.querySelectorAll('svg')) patchWordmark(svg as SVGElement, productName)
   }
-}
-
-/** Mask every text node under a root, honoring skip rules. */
-function maskTextNodes(root: Node, mask: (text: string) => string): void {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    const parent = node.parentElement
-    if (parent === null || skipElement(parent) || insideActiveEdit(node)) continue
-    const current = node.nodeValue
-    if (current === null) continue
-    const masked = mask(current)
-    if (masked !== current) node.nodeValue = masked
-  }
-}
-
-/** Rewrite one added subtree (or the initial whole document). */
-function rewriteTree(root: Node, mask: (text: string) => string): void {
-  if (root.nodeType === Node.TEXT_NODE) {
-    const parent = root.parentElement
-    if (parent !== null && !skipElement(parent) && !insideActiveEdit(root)) {
-      const masked = mask(root.nodeValue ?? '')
-      if (masked !== root.nodeValue) root.nodeValue = masked
-    }
-    return
-  }
-  if (!(root instanceof Element)) return
-  if (skipElement(root)) return
-  maskElement(root, mask)
-  if (root.tagName === 'svg') patchWordmark(root as SVGElement)
-  maskTextNodes(root, mask)
 }
 
 /**
- * Start the live DOM masking loop over the whole document.
- * @param mask - the masked-string transform (from the shared rules).
+ * Start the live wordmark replacement loop over the whole document.
+ * @param productName - the replacement wordmark text.
  * @returns the disposer (disconnects the observer).
  */
-export function startDomMasking(mask: (text: string) => string): () => void {
+export function startWordmarkMasking(productName: string): () => void {
   const observer = new MutationObserver((records) => {
     for (const record of records) {
-      if (record.type === 'characterData' && record.target.nodeValue !== null) {
-        const parent = record.target.parentElement
-        if (parent !== null && !skipElement(parent) && !insideActiveEdit(record.target)) {
-          const masked = mask(record.target.nodeValue)
-          if (masked !== record.target.nodeValue) record.target.nodeValue = masked
-        }
-        continue
-      }
       for (const added of record.addedNodes) {
-        if (added.nodeType !== Node.TEXT_NODE && !(added instanceof Element)) continue
-        rewriteTree(added, mask)
+        patchWordmarksUnder(added, productName)
       }
     }
   })
-  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true })
-  rewriteTree(document.documentElement, mask)
+  observer.observe(document.documentElement, { childList: true, subtree: true })
+  patchWordmarksUnder(document.documentElement, productName)
   return () => { observer.disconnect() }
 }
 
@@ -139,8 +95,7 @@ export function startDomMasking(mask: (text: string) => string): () => void {
  * @returns the disposer (restores the original title accessor).
  */
 export function patchTitle(mask: (text: string) => string): () => void {
-  const holder: typeof Document.prototype = HTMLDocument.prototype
-  const descriptor = Object.getOwnPropertyDescriptor(holder, 'title')
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'title')
     ?? Object.getOwnPropertyDescriptor(Document.prototype, 'title')
   if (descriptor === undefined || descriptor.set === undefined || descriptor.get === undefined) {
     // Non-browser environment (jsdom-less tests); nothing to patch.
