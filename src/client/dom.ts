@@ -1,144 +1,109 @@
 /**
- * Browser branding engine: replaces the DeepSeek Harness wordmark, masks
- * the tab title, and strips the new-conversation hero chrome (fish logo and
- * preview badge). Nothing else in the document is touched — model selector,
- * provider names, settings copy, and message content stay as-is.
+ * 浏览器品牌处理引擎：替换 DeepSeek Harness 字标、隐藏标签页产品名，并清理
+ * 新对话欢迎区的鱼形图标和“预览版”徽章。模型选择器、提供方名称、设置文案
+ * 与消息内容均保持原样。
  *
- * - `patchTitle` shadows the `document.title` setter so every assignment
- *   (including the shell's `"<session> — DeepSeek Harness"` projection) lands
- *   masked, then masks the initial value.
- * - `startWordmarkMasking` runs a MutationObserver over the whole document
- *   and swaps every `BrandWordmark` svg (sidebar brand row, welcome notice,
- *   onboarding dialog) for the neutral `wordmark` lettering: the svg's
- *   children are removed wholesale (whale, letterforms, HARNESS badge — the
- *   entire original mark) and a centered `<text>` is injected at the
- *   configured `wordmarkSize`. The svg element itself stays, so its size and
- *   the enclosing button (a New Session shortcut with its own aria-label and
- *   click handler) keep working; React only diffs props it knows, and the
- *   component's props never change, so neither the child removal nor the
- *   injected text is undone by re-renders — a remounted svg is simply patched
- *   again.
- * - `startHeroCleanup` hides the fish logo and the preview badge in the
- *   new-conversation hero headline (the row reading `开始构建吧`), and flips
- *   the headline row to a centered flex so the remaining text stays visually
- *   centered. Both hidden elements keep React's tree intact (inline styles
- *   only), so re-renders and remounts are safe; a remounted hero is simply
- *   cleaned again.
+ * - `patchTitle` 覆盖 `document.title` 的 setter，使每次赋值（包括外壳生成的
+ *   `"<会话> — DeepSeek Harness"`）都会先完成替换，并立即处理初始标题。
+ * - `startWordmarkMasking` 在整个文档上运行 MutationObserver，把侧栏品牌行、
+ *   欢迎提示和引导弹窗中的每个 `BrandWordmark` SVG 替换为配置的矢量字标。
+ *   原字标的鲸鱼、字母和 HARNESS 铭牌会整体移除，再注入生成后的路径。
+ *   宿主持有的 SVG 外壳保持不变，因此外层按钮的尺寸、aria-label 和点击处理
+ *   均不受影响。按钮整体重挂载时会再次替换。
+ * - `startHeroCleanup` 隐藏“开始构建吧”标题行中的鱼形图标和“预览版”徽章，
+ *   并把标题行改为居中 flex。这里只写入行内样式，不删除 React 节点；重渲染
+ *   或重挂载后仍可再次处理。
  *
- * Wordmark detection needs the descendant scan: React mounts the whole UI as
- * one subtree addition, so the svg is never the added node itself.
+ * 字标识别必须扫描新增子树的所有后代：React 会一次挂载整棵界面子树，SVG
+ * 通常不是 MutationObserver 记录中的新增节点本身。
  * @module dsh-sfw/client/dom
  */
 
-import { defaultConfig } from '../mask.ts'
+import { resolveWordmark } from './wordmark.ts'
 
-/** The BrandWordmark clipPath id that identifies the wordmark svg. */
+/** 用于识别 BrandWordmark SVG 的 clipPath ID。 */
 const WHALE_CLIP_ID = 'dsh-wordmark-whale-clip'
 
-/** Marker attribute on the injected replacement text (idempotence). */
-const TEXT_MARKER = 'data-dsh-sfw-wordmark'
+/** 注入替代路径组时使用的幂等标记属性。 */
+const WORDMARK_MARKER = 'data-dsh-sfw-wordmark'
 
-/** The SVG namespace (createElementNS needs it). */
+/** createElementNS 所需的 SVG 命名空间。 */
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-/** The wordmark svg viewBox height (the brand button ships 182×24). */
-const VIEWBOX_HEIGHT = 24
-
-/**
- * The FishLogo svg viewBox (ui-primitives FishLogo, exact extract) — the
- * stable marker of the hero fish logo.
- */
+/** FishLogo SVG 的原始 viewBox，用作欢迎区鱼形图标的稳定标识。 */
 const FISH_VIEWBOX = '0 0 23.16 17.04'
 
-/** Marker attribute on hidden hero elements (idempotence). */
+/** 隐藏欢迎区元素时使用的幂等标记属性。 */
 const HIDDEN_MARKER = 'data-dsh-sfw-hidden'
 
-/** The hero headline text (locales.ts `hero.headline`). */
+/** 欢迎区标题文案，对应 locales.ts 中的 `hero.headline`。 */
 const HERO_HEADLINE = '开始构建吧'
 
-/** The hero preview badge text (locales.ts `hero.preview`). */
+/** 欢迎区预览徽章文案，对应 locales.ts 中的 `hero.preview`。 */
 const HERO_PREVIEW = '预览版'
 
 /**
- * Baseline y for a size-`size` wordmark text that keeps the verified optical
- * centering of the original 14px lettering (baseline 16.5 in the 24-tall
- * viewBox, font-metric box centered ~1px above the middle): the metric box
- * grows linearly with the font size, so the baseline moves 5.5/14 px per px
- * of font size.
- * @param size - the wordmark font size in px.
- * @returns the baseline y as an SVG attribute string.
+ * 用配置名称对应的矢量路径替换一个字标 SVG 的内容。宿主持有的外层 SVG
+ * 保持原位，从而保留 React 几何、按钮行为、aria 属性和 CSS 颜色继承。
+ * @param svg 通过鲸鱼 clipPath ID 识别出的字标 SVG。
+ * @param wordmark 要显示的字标名称。
  */
-function centeredBaseline(size: number): string {
-  return String(Math.round((16.5 + (size - 14) * (5.5 / 14)) * 10) / 10)
-}
-
-/**
- * Replace one wordmark svg's content with the neutral lettering: remove the
- * original children (whale + letterforms + badge) and inject a centered
- * `<text>` element. No-op on svgs that are not the wordmark or are already
- * replaced.
- * @param svg - the wordmark svg element (identified by the whale clip id).
- * @param wordmark - the replacement lettering (empty keeps the svg blank).
- * @param size - the lettering font size in px (defaults to the config default).
- */
-export function patchWordmark(
-  svg: SVGElement, wordmark: string, size = defaultConfig().wordmarkSize,
-): void {
-  if (svg.querySelector(`[${TEXT_MARKER}]`) !== null) return
-  if (svg.querySelector(`#${WHALE_CLIP_ID}`) === null) return
+export function patchWordmark(svg: SVGElement, wordmark: string): void {
+  const current = svg.querySelector(`[${WORDMARK_MARKER}]`)
+  if (current === null && svg.querySelector(`#${WHALE_CLIP_ID}`) === null) return
+  const vector = resolveWordmark(wordmark)
+  if (current?.getAttribute(WORDMARK_MARKER) === vector.key) return
   svg.replaceChildren()
-  if (wordmark === '') return
-  const text = document.createElementNS(SVG_NS, 'text')
-  text.setAttribute(TEXT_MARKER, 'true')
-  text.setAttribute('x', String(182 / 2))
-  text.setAttribute('y', centeredBaseline(size))
-  text.setAttribute('text-anchor', 'middle')
-  text.setAttribute('font-size', String(size))
-  text.setAttribute('font-weight', '600')
-  text.setAttribute('letter-spacing', String(Math.round((size / 14) * 10) / 10))
-  text.setAttribute('fill', 'currentColor')
-  text.textContent = wordmark
-  svg.appendChild(text)
+  svg.setAttribute('viewBox', vector.viewBox)
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+  const group = document.createElementNS(SVG_NS, 'g')
+  group.setAttribute(WORDMARK_MARKER, vector.key)
+  for (const { d, opacity } of vector.paths) {
+    const path = document.createElementNS(SVG_NS, 'path')
+    path.setAttribute('d', d)
+    path.setAttribute('fill', 'currentColor')
+    if (opacity !== 1) path.setAttribute('fill-opacity', String(opacity))
+    group.appendChild(path)
+  }
+  svg.appendChild(group)
 }
 
-/** Patch every wordmark svg under a root (including the root itself). */
-function patchWordmarksUnder(root: Node, wordmark: string, size: number): void {
-  if (root instanceof SVGElement) patchWordmark(root, wordmark, size)
+/** 替换根节点自身及其所有后代中的字标 SVG。 */
+function patchWordmarksUnder(root: Node, wordmark: string): void {
+  if (root instanceof SVGElement) patchWordmark(root, wordmark)
   if (root instanceof Element) {
-    for (const svg of root.querySelectorAll('svg')) patchWordmark(svg as SVGElement, wordmark, size)
+    for (const svg of root.querySelectorAll('svg')) patchWordmark(svg as SVGElement, wordmark)
   }
 }
 
 /**
- * Start the live wordmark replacement loop over the whole document.
- * @param wordmark - the replacement lettering.
- * @param size - the lettering font size in px (defaults to the config default).
- * @returns the disposer (disconnects the observer).
+ * 在整个文档上启动实时字标替换。
+ * @param wordmark 要显示的字标名称。
+ * @returns 用于断开观察器的释放函数。
  */
-export function startWordmarkMasking(
-  wordmark: string, size = defaultConfig().wordmarkSize,
-): () => void {
+export function startWordmarkMasking(wordmark: string): () => void {
   const observer = new MutationObserver((records) => {
     for (const record of records) {
+      // React 若在现有 SVG 内恢复 children，变更目标会是外层字标，而不是
+      // 一个新加入的 SVG 子树，因此也要检查 record.target。
+      if (record.target instanceof SVGElement) patchWordmark(record.target, wordmark)
       for (const added of record.addedNodes) {
-        patchWordmarksUnder(added, wordmark, size)
+        patchWordmarksUnder(added, wordmark)
       }
     }
   })
   observer.observe(document.documentElement, { childList: true, subtree: true })
-  patchWordmarksUnder(document.documentElement, wordmark, size)
+  patchWordmarksUnder(document.documentElement, wordmark)
   return () => { observer.disconnect() }
 }
 
 /**
- * Strip the new-conversation hero chrome under a root: find the hero headline
- * row (the span reading {@link HERO_HEADLINE}), hide its fish logo (the
- * FishLogo svg, identified by {@link FISH_VIEWBOX}) and its preview badge
- * (the span reading {@link HERO_PREVIEW}), and flip the row to a centered
- * flex so the remaining headline text stays visually centered. Hidden
- * elements are marked with {@link HIDDEN_MARKER} and keep React's tree
- * intact (inline styles only). No-op on roots without a hero.
- * @param root - the added subtree or the document root.
+ * 清理根节点下的新对话欢迎区：找到包含 {@link HERO_HEADLINE} 的标题行，隐藏
+ * 通过 {@link FISH_VIEWBOX} 识别的 FishLogo SVG 和包含 {@link HERO_PREVIEW}
+ * 的徽章，并把标题行改为居中 flex，使剩余标题保持视觉居中。被隐藏元素以
+ * {@link HIDDEN_MARKER} 标记，只写入行内样式，不破坏 React 节点树。不存在
+ * 欢迎区时不执行任何操作。
+ * @param root 新增子树或文档根节点。
  */
 export function patchHeroChrome(root: Node): void {
   if (!(root instanceof Element)) return
@@ -148,8 +113,8 @@ export function patchHeroChrome(root: Node): void {
     const headline = span.parentElement
     if (headline === null || headline.getAttribute(HIDDEN_MARKER) === 'true') continue
     headline.setAttribute(HIDDEN_MARKER, 'true')
-    // The row is a 34px-fish / title / badge grid; dropping the two side
-    // items would leave the title off-center, so own the centering.
+    // 原行是“34px 鱼图标 / 标题 / 徽章”三列网格；隐藏两侧后必须接管居中，
+    // 否则标题会偏离视觉中心。
     headline.style.display = 'flex'
     headline.style.alignItems = 'center'
     headline.style.justifyContent = 'center'
@@ -165,8 +130,8 @@ export function patchHeroChrome(root: Node): void {
 }
 
 /**
- * Start the live hero-chrome cleanup loop over the whole document.
- * @returns the disposer (disconnects the observer).
+ * 在整个文档上启动实时欢迎区清理。
+ * @returns 用于断开观察器的释放函数。
  */
 export function startHeroCleanup(): () => void {
   const observer = new MutationObserver((records) => {
@@ -182,18 +147,17 @@ export function startHeroCleanup(): () => void {
 }
 
 /**
- * Shadow the `document.title` setter so every assignment lands masked, and
- * mask the current value. The shell's DocumentTitle component stores the
- * "original" title at mount and restores it on unmount — both flows go
- * through the setter and therefore through the mask.
- * @param mask - the masked-string transform.
- * @returns the disposer (restores the original title accessor).
+ * 覆盖 `document.title` setter，使每次赋值都经过替换，并立即处理当前值。
+ * 外壳的 DocumentTitle 组件会在挂载时保存“原始”标题、卸载时恢复它；两个
+ * 流程都会经过 setter，因此都会被处理。
+ * @param mask 标题字符串变换函数。
+ * @returns 恢复原始 title 访问器的释放函数。
  */
 export function patchTitle(mask: (text: string) => string): () => void {
   const descriptor = Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'title')
     ?? Object.getOwnPropertyDescriptor(Document.prototype, 'title')
   if (descriptor === undefined || descriptor.set === undefined || descriptor.get === undefined) {
-    // Non-browser environment (jsdom-less tests); nothing to patch.
+    // 无浏览器能力的环境（例如未启用 jsdom 的测试）无需处理。
     return () => {}
   }
   const { get, set } = descriptor

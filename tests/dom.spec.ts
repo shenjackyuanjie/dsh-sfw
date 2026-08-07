@@ -1,18 +1,16 @@
 // @vitest-environment jsdom
 /**
- * Browser-half DOM engine tests: the brand wordmark replacement (including
- * the descendant-svg scan and the button-functionality guarantee), the title
- * setter shadow, and the guarantee that ordinary UI copy is left untouched.
+ * 浏览器端 DOM 引擎测试：品牌字标替换（含后代 SVG 扫描与按钮功能保证）、
+ * 标题 setter 覆盖，以及普通界面文案保持不变的保证。
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { defaultConfig, maskProductName } from '../src/mask.ts'
+import { maskProductName } from '../src/mask.ts'
 import {
   patchHeroChrome, patchTitle, patchWordmark, startHeroCleanup,
   startWordmarkMasking,
 } from '../src/client/dom.ts'
 
-const WORDMARK = defaultConfig().wordmark
-const WORDMARK_SIZE = defaultConfig().wordmarkSize
+const WORDMARK = 'opencode'
 
 function wordmarkSvg(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -34,7 +32,7 @@ function wordmarkSvg(): SVGSVGElement {
   return svg
 }
 
-/** Flush pending MutationObserver microtasks (jsdom delivers them async). */
+/** 刷新待处理的 MutationObserver 微任务；jsdom 会异步投递。 */
 const flush = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
 
 afterEach(() => {
@@ -43,38 +41,50 @@ afterEach(() => {
 })
 
 describe('patchWordmark', () => {
-  it('removes the entire original svg content (whale, letterforms, badge)', () => {
+  it('移除原鲸鱼、字母轮廓和铭牌', () => {
     const svg = wordmarkSvg()
     patchWordmark(svg, WORDMARK)
     expect(svg.querySelector('#whale')).toBeNull()
     expect(svg.querySelector('#letter-a')).toBeNull()
     expect(svg.querySelector('#badge-plate')).toBeNull()
-    expect(svg.querySelectorAll('path')).toHaveLength(0)
     expect(svg.querySelectorAll('rect')).toHaveLength(0)
-    expect(svg.querySelectorAll('g')).toHaveLength(0)
+    expect(svg.querySelectorAll('defs')).toHaveLength(0)
   })
 
-  it('injects the centered wordmark lettering at the configured size', () => {
+  it('注入 OpenCode 官方 viewBox 和精确矢量路径', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, 'opencode', WORDMARK_SIZE)
-    const text = svg.querySelector('text[data-dsh-sfw-wordmark]')
-    expect(text?.textContent).toBe('opencode')
-    expect(text?.getAttribute('x')).toBe('91')
-    expect(text?.getAttribute('text-anchor')).toBe('middle')
-    expect(text?.getAttribute('font-size')).toBe(String(WORDMARK_SIZE))
-    expect(text?.getAttribute('fill')).toBe('currentColor')
+    patchWordmark(svg, WORDMARK)
+    const group = svg.querySelector('g[data-dsh-sfw-wordmark="opencode"]')
+    const paths = group?.querySelectorAll('path') ?? []
+    expect(svg.getAttribute('viewBox')).toBe('0 0 234 42')
+    expect(svg.getAttribute('preserveAspectRatio')).toBe('xMidYMid meet')
+    expect(paths).toHaveLength(16)
+    expect(paths[0]?.getAttribute('d')).toBe('M18 30H6V18H18V30Z')
+    expect(paths[15]?.getAttribute('d'))
+      .toBe('M216 12V18H228V12H216ZM234 24H216V30H234V36H210V6H234V24Z')
+    expect(svg.querySelector('text')).toBeNull()
   })
 
-  it('scales the baseline and letter-spacing with a custom size', () => {
+  it('把 OpenCode 的三档颜色映射为可随主题变化的 currentColor', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, 'opencode', 22)
-    const text = svg.querySelector('text[data-dsh-sfw-wordmark]')
-    expect(text?.getAttribute('font-size')).toBe('22')
-    expect(text?.getAttribute('y')).toBe('19.6')
-    expect(text?.getAttribute('letter-spacing')).toBe('1.6')
+    patchWordmark(svg, WORDMARK)
+    const paths = svg.querySelectorAll('path')
+    expect([...paths].every(path => path.getAttribute('fill') === 'currentColor')).toBe(true)
+    expect(paths[0]?.getAttribute('fill-opacity')).toBe('0.3')
+    expect(paths[1]?.getAttribute('fill-opacity')).toBe('0.72')
+    expect(paths[9]?.hasAttribute('fill-opacity')).toBe(false)
   })
 
-  it('keeps the svg element itself (button sizing and clicks survive)', () => {
+  it('为自定义名称注入像素矢量路径', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, 'openclaw')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 47 7')
+    expect(svg.querySelector('g[data-dsh-sfw-wordmark="openclaw"]')).not.toBeNull()
+    expect(svg.querySelectorAll('path')).toHaveLength(8)
+    expect(svg.querySelector('text')).toBeNull()
+  })
+
+  it('保留 SVG 元素自身以及按钮尺寸和点击行为', () => {
     const svg = wordmarkSvg()
     svg.setAttribute('width', '182')
     svg.setAttribute('height', '24')
@@ -88,7 +98,7 @@ describe('patchWordmark', () => {
     expect(button.getAttribute('aria-label')).toBe('新会话')
   })
 
-  it('is idempotent (single text, no double patching)', () => {
+  it('具有幂等性且不会重复注入路径组', () => {
     const svg = wordmarkSvg()
     patchWordmark(svg, WORDMARK)
     patchWordmark(svg, WORDMARK)
@@ -96,14 +106,16 @@ describe('patchWordmark', () => {
     expect(svg.children).toHaveLength(1)
   })
 
-  it('clears the svg without injecting text for an empty wordmark', () => {
+  it('在同一个 SVG 上切换配置字标', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, '')
-    expect(svg.children).toHaveLength(0)
-    expect(svg.querySelector('[data-dsh-sfw-wordmark]')).toBeNull()
+    patchWordmark(svg, WORDMARK)
+    patchWordmark(svg, 'reasonix')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 47 7')
+    expect(svg.querySelector('g[data-dsh-sfw-wordmark="reasonix"]')).not.toBeNull()
+    expect(svg.querySelectorAll('path')).toHaveLength(8)
   })
 
-  it('is a no-op on svgs without the whale clip', () => {
+  it('不处理缺少鲸鱼 clipPath 的 SVG', () => {
     const other = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     other.innerHTML = '<path d="M1 1 Z" fill="currentColor"/>'
     patchWordmark(other, WORDMARK)
@@ -112,22 +124,22 @@ describe('patchWordmark', () => {
 })
 
 describe('startWordmarkMasking', () => {
-  it('patches wordmarks added as descendants of a large subtree', async () => {
+  it('处理作为大型新增子树后代出现的字标', async () => {
     const stop = startWordmarkMasking(WORDMARK)
-    // React-style mount: the whole UI arrives as ONE added subtree; the svg
-    // is a descendant, never the added node itself (regression guard).
+    // React 风格挂载会把整个界面作为一棵新增子树加入；SVG 只是后代，
+    // 不会成为新增节点本身，这是对应的回归保护。
     const root = document.createElement('div')
     root.innerHTML = '<section><button><svg></svg></button></section>'
     root.querySelector('svg')?.replaceWith(wordmarkSvg())
     document.body.appendChild(root)
     await flush()
     const svg = root.querySelector('svg') as SVGSVGElement
-    expect(svg.querySelectorAll('path')).toHaveLength(0)
-    expect(svg.querySelector('text[data-dsh-sfw-wordmark]')?.textContent).toBe(WORDMARK)
+    expect(svg.querySelectorAll('path')).toHaveLength(16)
+    expect(svg.querySelector('g[data-dsh-sfw-wordmark="opencode"]')).not.toBeNull()
     stop()
   })
 
-  it('re-patches a freshly remounted wordmark', async () => {
+  it('重新处理刚刚重挂载的字标', async () => {
     const stop = startWordmarkMasking(WORDMARK)
     document.body.appendChild(wordmarkSvg())
     await flush()
@@ -135,12 +147,25 @@ describe('startWordmarkMasking', () => {
     document.body.appendChild(wordmarkSvg())
     await flush()
     const svg = document.querySelector('svg') as SVGSVGElement
-    expect(svg.querySelectorAll('path')).toHaveLength(0)
+    expect(svg.querySelectorAll('path')).toHaveLength(16)
     expect(svg.querySelectorAll('[data-dsh-sfw-wordmark]')).toHaveLength(1)
     stop()
   })
 
-  it('leaves ordinary UI text and attributes untouched', async () => {
+  it('React 在现有 SVG 内恢复 children 时重新处理', async () => {
+    const stop = startWordmarkMasking(WORDMARK)
+    const svg = wordmarkSvg()
+    document.body.appendChild(svg)
+    await flush()
+    svg.innerHTML = wordmarkSvg().innerHTML
+    await flush()
+    expect(svg.querySelector('#whale')).toBeNull()
+    expect(svg.querySelectorAll('path')).toHaveLength(16)
+    expect(svg.querySelectorAll('[data-dsh-sfw-wordmark]')).toHaveLength(1)
+    stop()
+  })
+
+  it('保持普通界面文本和属性不变', async () => {
     const stop = startWordmarkMasking(WORDMARK)
     document.body.innerHTML = `
       <button aria-label="选择模型，当前 DeepSeek-V4-Flash，推理等级 High">
@@ -159,7 +184,7 @@ describe('startWordmarkMasking', () => {
 })
 
 describe('patchHeroChrome', () => {
-  /** A realistic hero headline row: fish svg + headline text + preview badge. */
+  /** 接近真实结构的欢迎区标题行：鱼形 SVG、标题文本和预览徽章。 */
   function heroRow(): HTMLElement {
     const headline = document.createElement('div')
     headline.innerHTML = `
@@ -172,7 +197,7 @@ describe('patchHeroChrome', () => {
     return headline
   }
 
-  it('hides the fish logo and the preview badge, keeps the headline text', () => {
+  it('隐藏鱼形图标和预览徽章并保留标题文本', () => {
     const headline = heroRow()
     patchHeroChrome(headline)
     const fish = headline.querySelector('svg') as SVGSVGElement
@@ -184,22 +209,22 @@ describe('patchHeroChrome', () => {
     expect(badge.getAttribute('data-dsh-sfw-hidden')).toBe('true')
     expect(text.textContent).toBe('开始构建吧')
     expect(text.style.display).not.toBe('none')
-    // The row is flipped to a centered flex so the remaining text stays centered.
+    // 标题行改为居中 flex 后，剩余文本仍位于视觉中心。
     expect(headline.style.display).toBe('flex')
     expect(headline.style.justifyContent).toBe('center')
   })
 
-  it('is idempotent (single marker, no double hiding)', () => {
+  it('具有幂等性且不会重复隐藏', () => {
     const headline = heroRow()
     patchHeroChrome(headline)
     patchHeroChrome(headline)
     expect(headline.getAttribute('data-dsh-sfw-hidden')).toBe('true')
-    // The row marker lives on the row itself; descendants carry fish + badge.
+    // 行标记位于标题行自身，后代标记分别位于鱼形图标和徽章上。
     expect(headline.querySelectorAll('[data-dsh-sfw-hidden]')).toHaveLength(2)
     expect(headline.querySelector('svg')?.style.display).toBe('none')
   })
 
-  it('is a no-op on trees without a hero headline', () => {
+  it('不处理缺少欢迎区标题的节点树', () => {
     const root = document.createElement('div')
     root.innerHTML = '<span>预览版</span><svg viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>'
     patchHeroChrome(root)
@@ -207,7 +232,7 @@ describe('patchHeroChrome', () => {
     expect(root.querySelector('svg')?.style.display).not.toBe('none')
   })
 
-  it('leaves fish logos outside the hero headline untouched', () => {
+  it('保持欢迎区标题以外的鱼形图标不变', () => {
     const root = document.createElement('div')
     root.innerHTML = '<svg viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>'
     patchHeroChrome(root)
@@ -216,7 +241,7 @@ describe('patchHeroChrome', () => {
 })
 
 describe('startHeroCleanup', () => {
-  it('cleans a hero mounted after the observer started', async () => {
+  it('清理观察器启动后才挂载的欢迎区', async () => {
     const stop = startHeroCleanup()
     const headline = document.createElement('div')
     headline.innerHTML = `
@@ -231,7 +256,7 @@ describe('startHeroCleanup', () => {
     stop()
   })
 
-  it('cleans a freshly remounted hero again', async () => {
+  it('再次清理刚刚重挂载的欢迎区', async () => {
     const stop = startHeroCleanup()
     for (let i = 0; i < 2; i++) {
       document.body.innerHTML = ''
@@ -253,7 +278,7 @@ describe('startHeroCleanup', () => {
 describe('patchTitle', () => {
   const mask = (text: string): string => maskProductName(text, 'Harness')
 
-  it('masks the initial title and every later assignment', () => {
+  it('处理初始标题和之后的每次赋值', () => {
     document.title = 'DeepSeek Harness'
     const stop = patchTitle(mask)
     expect(document.title).toBe('Harness')
@@ -264,7 +289,7 @@ describe('patchTitle', () => {
     expect(document.title).toBe('DeepSeek Harness')
   })
 
-  it('restores the original accessor on dispose', () => {
+  it('释放时恢复原始访问器', () => {
     const stop = patchTitle(mask)
     stop()
     document.title = 'DeepSeek Harness'

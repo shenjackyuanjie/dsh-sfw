@@ -1,7 +1,7 @@
 {
   "name": "dsh-sfw",
   "version": "0.1.0",
-  "description": "dsh plugin that masks DeepSeek branding in the web GUI (title, wordmark letterforms, provider/model names) so the harness is not recognizable while it is still in private beta",
+  "description": "隐藏 dsh Web 界面中的 DeepSeek 品牌字标和产品标题，并替换为可配置矢量字标",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

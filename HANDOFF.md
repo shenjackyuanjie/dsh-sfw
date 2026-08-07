@@ -1,12 +1,12 @@
 # dsh-sfw 交接文档
 
-> 写于 2026-08-08。当前 HEAD:`91b542a`(Bigger wordmark (configurable size) and strip hero fish + preview badge)。
+> 写于 2026-08-08，最近更新于可配置矢量字标改造。
 
 ## 1. 这是什么
 
 一个 dsh(DeepSeek Harness)插件,让 WebUI **不被认出是 DeepSeek**:
 
-- 左上角品牌字标(原为 "deepseek-official" 字母 + HARNESS 铭牌 + 鲸鱼图形的 SVG)→ **整个清空,换成居中 "opencode" 文字**(按钮功能保留:点击新建会话;字号由配置 `wordmarkSize` 控制,默认 18px)。
+- 左上角品牌字标(原为 "deepseek-official" 字母 + HARNESS 铭牌 + 鲸鱼图形的 SVG)→ **保留外层 SVG，内容替换为配置名称对应的矢量路径**(按钮功能保留:点击新建会话;不依赖字体渲染)。
 - 浏览器标签页标题 `DeepSeek Harness` → `Harness`(含会话标题 `xxx — DeepSeek Harness`)。
 - 新对话欢迎页 hero(「开始构建吧」那一行)→ **鱼形 logo 与「预览版」徽章隐藏**,行改为居中 flex,标题保持视觉居中(2026-08-08 用户追加要求)。
 
@@ -16,9 +16,9 @@
 
 | 项 | 状态 |
 |---|---|
-| 单元测试 | ✅ 29 个全绿(`pnpm test`) |
+| 单元测试 | ✅ 35 个全绿(`pnpm test`) |
 | 构建 | ✅ `pnpm run build` 通过,产出 `lib/index.js` + `lib/client.js` |
-| 真实浏览器验证 | ✅ 用 headless Edge(CDP)实测运行中的 3080 页面:0 个未替换字标,`opencode` 文字 18px 且 bbox 水平居中(x≈91),按钮 aria-label/尺寸不变;hero 行鱼 logo 与「预览版」已隐藏、标题居中;无页面报错 |
+| 真实浏览器验证 | ⚠️ 旧版文字方案曾通过 headless Edge(CDP)验证；新矢量路径方案仍需刷新运行页面做一次视觉确认 |
 | 运行部署 | ✅ 已装进 `$DSH_HOME/profiles/web`(link 方式),cordis.patch.yml 已加行,服务端热重载已生效 |
 | 未提交改动 | 无(全部已提交) |
 
@@ -34,11 +34,13 @@ dsh-sfw/
 │   ├── index.ts          # node 半部:Config(schemastery)+ apply → httpServer.tapIndex(改写<title>+注入 window.__DSH_SFW__)
 │   └── client/
 │       ├── index.ts      # 浏览器入口:{ name, apply } → 启动标题掩蔽 + 字标替换 + hero 清理
-│       └── dom.ts        # patchTitle(setter 拦截)/patchWordmark(清空 SVG + 注入 <text>,字号可配)/startWordmarkMasking(observer)/patchHeroChrome + startHeroCleanup(hero 鱼 logo 与预览版徽章隐藏)
+│       ├── dom.ts        # patchTitle(setter 拦截)/patchWordmark(注入配置路径)/startWordmarkMasking(observer)/hero 清理
+│       └── wordmark.ts   # OpenCode 官方路径 + 通用 5×7 像素矢量字库
 └── tests/
-    ├── mask.spec.ts      # 配置解析、productName 掩蔽、wordmarkSize 校验
+    ├── mask.spec.ts      # 配置解析与 productName 掩蔽
     ├── index-tap.spec.ts # index.html 标题改写 + 载荷注入/转义
-    └── dom.spec.ts       # jsdom:字标替换(含后代扫描回归)、字号/基线、hero 清理、标题 setter、不碰普通文本
+    ├── dom.spec.ts       # jsdom:矢量字标替换、重挂载回归、hero 清理、标题 setter、不碰普通文本
+    └── wordmark.spec.ts  # OpenCode 官方路径与通用像素字库
 ```
 
 ## 4. 架构与关键机制(新接手必读)
@@ -53,14 +55,14 @@ dsh-sfw/
    - `startWordmarkMasking`:MutationObserver 全文档监听,任何**新增子树内的所有后代 svg** 都会检查是否为字标(`#dsh-wordmark-whale-clip` 特征),是则 `patchWordmark`;
    - `startHeroCleanup`:同一 observer 模式,任何新增子树内找到文本为「开始构建吧」的行(hero 标题行),把行内 `viewBox="0 0 23.16 17.04"` 的鱼 logo 与「预览版」徽章 `display:none`,并把行从三列 grid 改成居中 flex(否则去掉两侧元素后标题会偏位)。锚点是中文文案,宿主改文案会失效(已知限制)。
 
-**字标替换原理**(`patchWordmark`):识别后 `svg.replaceChildren()` 清空全部原始内容(鲸鱼、字母、铭牌、defs 全部移除),再 `createElementNS` 注入居中 `<text data-dsh-sfw-wordmark>`,字号/基线/字距随 `wordmarkSize` 缩放(基线按实测字体度量线性外推,bbox 中心保持 y≈11、x=91)。SVG 元素本身保留(尺寸 182×24 不动),外层按钮(新建会话)不受影响。React 只 diff 它知道的 props,组件 props 恒定 → 重渲染不会回写/重插;按钮整体重挂载时 observer 会再次处理(幂等标记 `data-dsh-sfw-wordmark` 防止重复注入)。hero 清理同理,靠 `data-dsh-sfw-hidden` 标记 + 行上标记保证幂等。
+**字标替换原理**(`patchWordmark`):识别后 `svg.replaceChildren()` 清空全部原始内容(鲸鱼、字母、铭牌、defs 全部移除)，保留宿主持有的外层 SVG(尺寸 182×24 不动)，再注入 `wordmark` 对应的矢量路径。`opencode` 使用固定上游提交中的 16 条官方路径；其他名称由内置 5×7 字库生成 path，按名称长度动态设置 viewBox。颜色使用 `currentColor` 加透明度，兼容 DSH 亮暗主题。外层按钮(新建会话)不受影响；按钮整体重挂载或 React 恢复同一 SVG 的 children 时，observer 会再次处理，`data-dsh-sfw-wordmark` 保证幂等。hero 清理同理，靠 `data-dsh-sfw-hidden` 标记 + 行上标记保证幂等。
 
 **两个历史教训**(对应两次修复,别倒退):
 
 - 不能只在"新增节点本身就是 svg"时处理字标 —— React 整棵 UI 是一次性挂载的大树,svg 是**后代**节点。必须扫 `querySelectorAll('svg')`。
 - 不能全局改文本节点 —— 用户否决(模型选择器被改残)。字标是 SVG 矢量字形,文本替换本来就覆盖不了,必须动 SVG。
 
-**验证过的真实行为**(headless Edge 实测):`opencode` 文字 bbox 居中(182 视框中心 x≈91),按钮 216×24 不变,aria-label "新建会话" 保留,页面无 console/page 错误。
+**自动化验证行为**:`opencode` 使用官方 viewBox 和 16 条路径，宿主 SVG 的 182×24 尺寸、外层按钮和 aria-label 保留；重挂载与原地恢复 children 都会重新处理。
 
 ## 5. 安装与运行状态(本机)
 
@@ -88,18 +90,17 @@ dsh-sfw/
       config:
         enabled: true          # 总开关
         productName: 'Harness' # 标签页标题替换名
-        wordmark: 'opencode'   # 字标替换文字(空字符串 = 清空但不注入文字)
-        wordmarkSize: 18       # 字标字号(px,默认 18;改这里即可调大小)
+        wordmark: 'opencode'   # 可改为 openclaw、harmes、reasonix 或其他名称
 ```
 
-配置热重载即生效(刷新页面)。注意:`wordmarkSize` 是新增字段,运行中的 `dsh web` 还是旧 node 半部,注入载荷里没有它 → 客户端回退默认 18;等下次重启后才会随配置下发。
+`opencode` 使用官方矢量资产，其他名称使用通用像素矢量字库。已移除旧的 `wordmarkSize`，尺寸由 SVG viewBox 自动适配。配置热重载后刷新页面即可生效。
 
 ## 7. 日常迭代流程
 
 ```sh
 cd D:\githubs\deepseek\dsh-sfw
 pnpm run build    # tsdown 产出 lib/index.js + lib/client.js;tsc 产出 lib/types
-pnpm test         # vitest,29 个用例
+pnpm test         # vitest,35 个用例
 ```
 
 改完 client 代码 → build → 浏览器刷新。改完 node 代码 → build → 重启 `dsh web`。改完配置 → 直接刷新。
@@ -117,7 +118,7 @@ Start-Process 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' `
 bun run D:\githubs\deepseek\test-shenjackyuanjie\agent-tmp\sfw-wordmark.mjs
 ```
 
-诊断脚本在 `D:\githubs\deepseek\test-shenjackyuanjie\agent-tmp\`(sfw-wordmark.mjs 等,工作区 gitignore 内)。断言要点:未替换字标数 = 0;`svg text[data-dsh-sfw-wordmark]` 存在且文本正确;按钮 aria-label/尺寸不变;无 console/page error。验证完记得杀掉 headless Edge(命令行匹配 `remote-debugging-port=9223`)。
+诊断脚本在 `D:\githubs\deepseek\test-shenjackyuanjie\agent-tmp\`(sfw-wordmark.mjs 等,工作区 gitignore 内)。断言要点:未替换字标数 = 0;`svg g[data-dsh-sfw-wordmark="<配置值>"]` 存在且包含 path;按钮 aria-label/尺寸不变;无 console/page error。`opencode` 额外断言 16 条 path 和 `0 0 234 42` viewBox。验证完记得杀掉 headless Edge(命令行匹配 `remote-debugging-port=9223`)。
 
 ## 9. 已知限制与待办
 
@@ -130,8 +131,7 @@ bun run D:\githubs\deepseek\test-shenjackyuanjie\agent-tmp\sfw-wordmark.mjs
 
 ## 10. 下一步建议
 
-- 用户刷新页面确认效果(hero 鱼/预览版已去、opencode 已加大;预计已生效)。
-- 若觉得 18px 还不够大/太大,改 `cordis.patch.yml` 的 `wordmarkSize` 即可,无需改代码。
-- 下次自然重启 `dsh web` 时确认新 node 半部载荷(`__DSH_SFW__` 多了 wordmarkSize)无回归。
+- 用户刷新页面确认所选矢量字标的视觉效果。
+- 下次自然重启 `dsh web` 时确认精简后的 `__DSH_SFW__` 载荷无回归。
 - 若想连侧栏折叠态鲸鱼/favicon 一起处理,需要扩展 client 半部(它们是独立 SVG,不在 hero 行内)。
 - 若宿主界面文案改动导致 hero 清理失效,把「开始构建吧」「预览版」锚点提成配置字段。
