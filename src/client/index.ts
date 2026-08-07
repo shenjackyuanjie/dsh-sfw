@@ -2,8 +2,9 @@
  * dsh-sfw browser half: the branding plugin entry the web boot graph loads
  * from `/plugins/dsh-sfw/client.js`. Reads the host-injected config
  * (`window.__DSH_SFW__`, with local defaults as fallback) and starts the tab
- * title shadow plus the brand wordmark replacement. No cordis services are
- * needed — the DOM is the whole surface.
+ * title shadow, the brand wordmark replacement, and the new-conversation hero
+ * cleanup (fish logo + preview badge). No cordis services are needed — the
+ * DOM is the whole surface.
  * @module dsh-sfw/client
  */
 
@@ -11,7 +12,9 @@ import type { Context } from 'cordis'
 import {
   maskProductName, normalizeWireConfig, type SfwConfig,
 } from '../mask.ts'
-import { patchTitle, startWordmarkMasking } from './dom.ts'
+import {
+  patchTitle, startHeroCleanup, startWordmarkMasking,
+} from './dom.ts'
 
 /** Stable cordis plugin name (the web boot graph entry id). */
 export const name = 'dsh-sfw'
@@ -30,8 +33,8 @@ function readConfig(): SfwConfig {
 }
 
 /**
- * Client plugin body: start the title shadow and the wordmark replacement,
- * disposed with the plugin fiber.
+ * Client plugin body: start the title shadow, the wordmark replacement, and
+ * the hero cleanup, all disposed with the plugin fiber.
  * @param ctx - browser cordis context (service-free plugin).
  */
 export function apply(ctx: Context): void {
@@ -39,9 +42,11 @@ export function apply(ctx: Context): void {
   if (!config.enabled) return
   const mask = (text: string): string => maskProductName(text, config.productName)
   const stopTitle = patchTitle(mask)
-  const stopWordmark = startWordmarkMasking(config.wordmark)
+  const stopWordmark = startWordmarkMasking(config.wordmark, config.wordmarkSize)
+  const stopHeroCleanup = startHeroCleanup()
   ctx.effect(() => () => {
     stopTitle()
     stopWordmark()
+    stopHeroCleanup()
   }, 'dsh-sfw: branding')
 }

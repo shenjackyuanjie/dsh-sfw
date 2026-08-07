@@ -6,9 +6,13 @@
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import { defaultConfig, maskProductName } from '../src/mask.ts'
-import { patchTitle, patchWordmark, startWordmarkMasking } from '../src/client/dom.ts'
+import {
+  patchHeroChrome, patchTitle, patchWordmark, startHeroCleanup,
+  startWordmarkMasking,
+} from '../src/client/dom.ts'
 
 const WORDMARK = defaultConfig().wordmark
+const WORDMARK_SIZE = defaultConfig().wordmarkSize
 
 function wordmarkSvg(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -50,15 +54,24 @@ describe('patchWordmark', () => {
     expect(svg.querySelectorAll('g')).toHaveLength(0)
   })
 
-  it('injects the centered wordmark lettering', () => {
+  it('injects the centered wordmark lettering at the configured size', () => {
     const svg = wordmarkSvg()
-    patchWordmark(svg, 'opencode')
+    patchWordmark(svg, 'opencode', WORDMARK_SIZE)
     const text = svg.querySelector('text[data-dsh-sfw-wordmark]')
     expect(text?.textContent).toBe('opencode')
     expect(text?.getAttribute('x')).toBe('91')
     expect(text?.getAttribute('text-anchor')).toBe('middle')
-    expect(text?.getAttribute('font-size')).toBe('14')
+    expect(text?.getAttribute('font-size')).toBe(String(WORDMARK_SIZE))
     expect(text?.getAttribute('fill')).toBe('currentColor')
+  })
+
+  it('scales the baseline and letter-spacing with a custom size', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, 'opencode', 22)
+    const text = svg.querySelector('text[data-dsh-sfw-wordmark]')
+    expect(text?.getAttribute('font-size')).toBe('22')
+    expect(text?.getAttribute('y')).toBe('19.6')
+    expect(text?.getAttribute('letter-spacing')).toBe('1.6')
   })
 
   it('keeps the svg element itself (button sizing and clicks survive)', () => {
@@ -141,6 +154,98 @@ describe('startWordmarkMasking', () => {
     expect(document.body.textContent).toContain('DeepSeek (deepseek-official)')
     expect(document.querySelector('button')?.getAttribute('aria-label')).toBe('选择模型，当前 DeepSeek-V4-Flash，推理等级 High')
     expect(document.querySelector('input')?.getAttribute('placeholder')).toBe('deepseek-v4-pro')
+    stop()
+  })
+})
+
+describe('patchHeroChrome', () => {
+  /** A realistic hero headline row: fish svg + headline text + preview badge. */
+  function heroRow(): HTMLElement {
+    const headline = document.createElement('div')
+    headline.innerHTML = `
+      <svg width="34" height="25" viewBox="0 0 23.16 17.04" fill="none" aria-hidden="true">
+        <path d="M22.9168 1.43018Z" fill="currentColor"/>
+      </svg>
+      <span>开始构建吧</span>
+      <span>预览版</span>
+    `
+    return headline
+  }
+
+  it('hides the fish logo and the preview badge, keeps the headline text', () => {
+    const headline = heroRow()
+    patchHeroChrome(headline)
+    const fish = headline.querySelector('svg') as SVGSVGElement
+    const badge = headline.querySelectorAll('span')[1] as HTMLSpanElement
+    const text = headline.querySelector('span') as HTMLSpanElement
+    expect(fish.style.display).toBe('none')
+    expect(badge.style.display).toBe('none')
+    expect(fish.getAttribute('data-dsh-sfw-hidden')).toBe('true')
+    expect(badge.getAttribute('data-dsh-sfw-hidden')).toBe('true')
+    expect(text.textContent).toBe('开始构建吧')
+    expect(text.style.display).not.toBe('none')
+    // The row is flipped to a centered flex so the remaining text stays centered.
+    expect(headline.style.display).toBe('flex')
+    expect(headline.style.justifyContent).toBe('center')
+  })
+
+  it('is idempotent (single marker, no double hiding)', () => {
+    const headline = heroRow()
+    patchHeroChrome(headline)
+    patchHeroChrome(headline)
+    expect(headline.getAttribute('data-dsh-sfw-hidden')).toBe('true')
+    // The row marker lives on the row itself; descendants carry fish + badge.
+    expect(headline.querySelectorAll('[data-dsh-sfw-hidden]')).toHaveLength(2)
+    expect(headline.querySelector('svg')?.style.display).toBe('none')
+  })
+
+  it('is a no-op on trees without a hero headline', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<span>预览版</span><svg viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>'
+    patchHeroChrome(root)
+    expect(root.querySelector('span')?.style.display).not.toBe('none')
+    expect(root.querySelector('svg')?.style.display).not.toBe('none')
+  })
+
+  it('leaves fish logos outside the hero headline untouched', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<svg viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>'
+    patchHeroChrome(root)
+    expect(root.querySelector('svg')?.style.display).not.toBe('none')
+  })
+})
+
+describe('startHeroCleanup', () => {
+  it('cleans a hero mounted after the observer started', async () => {
+    const stop = startHeroCleanup()
+    const headline = document.createElement('div')
+    headline.innerHTML = `
+      <svg width="34" height="25" viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>
+      <span>开始构建吧</span>
+      <span>预览版</span>
+    `
+    document.body.appendChild(headline)
+    await flush()
+    expect(headline.querySelector('svg')?.style.display).toBe('none')
+    expect(headline.querySelectorAll('span')[1].style.display).toBe('none')
+    stop()
+  })
+
+  it('cleans a freshly remounted hero again', async () => {
+    const stop = startHeroCleanup()
+    for (let i = 0; i < 2; i++) {
+      document.body.innerHTML = ''
+      const headline = document.createElement('div')
+      headline.innerHTML = `
+        <svg width="34" height="25" viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>
+        <span>开始构建吧</span>
+        <span>预览版</span>
+      `
+      document.body.appendChild(headline)
+      await flush()
+      expect(headline.querySelector('svg')?.style.display).toBe('none')
+      expect(headline.querySelectorAll('span')[1].style.display).toBe('none')
+    }
     stop()
   })
 })

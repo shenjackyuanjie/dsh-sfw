@@ -28,6 +28,7 @@ export const Config: z<SfwConfig> = z.object({
   enabled: z.boolean().default(true),
   productName: z.string().default('Harness'),
   wordmark: z.string().default('opencode'),
+  wordmarkSize: z.number().min(1).default(18),
 })
 
 /** The httpServer seam surface this plugin uses (structural — no package import). */

@@ -1,8 +1,15 @@
 # dsh-sfw
 
-让 dsh WebUI「看起来不是 DeepSeek」的插件 —— 把左上角的 DeepSeek Harness 品牌 logo 和浏览器标签页标题换成中性名称,免得内测期间被路过的人认出来。
+同志们！dsh-sfw！防止你的同学/同事/好bro 发现你在内测dsh
 
-**只换品牌,不碰内容**:模型选择器、设置页、消息正文等界面上的 `DeepSeek` 字样(模型名、provider 名、用户内容)全部保持原样。
+然后 gank 你 让你说出 dsh 的秘密()
+
+目前
+
+- 将左上角的 DeepSeek Harness svg 换成了 OpenCode
+  - （当然我觉得应该后面加上可选要换成啥）
+- 然后把新对话页面的 deepseek logo 和 "预览版" 字样删掉了
+
 
 插件分两半:
 

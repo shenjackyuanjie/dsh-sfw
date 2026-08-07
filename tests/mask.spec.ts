@@ -25,6 +25,14 @@ describe('normalizeWireConfig', () => {
     expect(normalizeWireConfig({ wordmark: '' }).wordmark).toBe('opencode')
   })
 
+  it('accepts a positive wordmarkSize and ignores malformed ones', () => {
+    expect(normalizeWireConfig({ wordmarkSize: 22 }).wordmarkSize).toBe(22)
+    expect(normalizeWireConfig({ wordmarkSize: 'big' }).wordmarkSize).toBe(18)
+    expect(normalizeWireConfig({ wordmarkSize: -3 }).wordmarkSize).toBe(18)
+    expect(normalizeWireConfig({ wordmarkSize: 0 }).wordmarkSize).toBe(18)
+    expect(normalizeWireConfig({ wordmarkSize: NaN }).wordmarkSize).toBe(18)
+  })
+
   it('tolerates a payload serialized by an older host half (extra fields)', () => {
     const oldShape = {
       enabled: true,
@@ -34,7 +42,8 @@ describe('normalizeWireConfig', () => {
       models: { 'DeepSeek-V4-Flash': 'V4-Flash' },
       extra: {},
     }
-    expect(normalizeWireConfig(oldShape)).toEqual({ enabled: true, productName: 'Harness', wordmark: 'opencode' })
+    expect(normalizeWireConfig(oldShape))
+      .toEqual({ enabled: true, productName: 'Harness', wordmark: 'opencode', wordmarkSize: 18 })
   })
 })
 

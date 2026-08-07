@@ -1,13 +1,14 @@
 # dsh-sfw 交接文档
 
-> 写于 2026-08-08。当前 HEAD:`d45f0bc`(Replace the whole brand svg with opencode lettering)。
+> 写于 2026-08-08。当前 HEAD:`0987aaf`(Bigger wordmark (configurable size) and strip hero fish + preview badge)。
 
 ## 1. 这是什么
 
 一个 dsh(DeepSeek Harness)插件,让 WebUI **不被认出是 DeepSeek**:
 
-- 左上角品牌字标(原为 "deepseek-official" 字母 + HARNESS 铭牌 + 鲸鱼图形的 SVG)→ **整个清空,换成居中 "opencode" 文字**(按钮功能保留:点击新建会话)。
+- 左上角品牌字标(原为 "deepseek-official" 字母 + HARNESS 铭牌 + 鲸鱼图形的 SVG)→ **整个清空,换成居中 "opencode" 文字**(按钮功能保留:点击新建会话;字号由配置 `wordmarkSize` 控制,默认 18px)。
 - 浏览器标签页标题 `DeepSeek Harness` → `Harness`(含会话标题 `xxx — DeepSeek Harness`)。
+- 新对话欢迎页 hero(「开始构建吧」那一行)→ **鱼形 logo 与「预览版」徽章隐藏**,行改为居中 flex,标题保持视觉居中(2026-08-08 用户追加要求)。
 
 **刻意不做的事**(用户明确否决过):不改写任何其他界面文本 —— 模型选择器里的 `DeepSeek`/`DeepSeek-V4-Flash`、设置页、消息正文、用户自己的工作区/会话名,全部保持原样。早期版本做过全局文本替换,被用户否决后已删除,见 git 历史 `fe24c84`。
 
@@ -15,9 +16,9 @@
 
 | 项 | 状态 |
 |---|---|
-| 单元测试 | ✅ 21 个全绿(`pnpm test`) |
+| 单元测试 | ✅ 29 个全绿(`pnpm test`) |
 | 构建 | ✅ `pnpm run build` 通过,产出 `lib/index.js` + `lib/client.js` |
-| 真实浏览器验证 | ✅ 用 headless Edge(CDP)实测运行中的 3080 页面:0 个未替换字标,`opencode` 文字居中,按钮 aria-label/尺寸不变,无页面报错 |
+| 真实浏览器验证 | ✅ 用 headless Edge(CDP)实测运行中的 3080 页面:0 个未替换字标,`opencode` 文字 18px 且 bbox 水平居中(x≈91),按钮 aria-label/尺寸不变;hero 行鱼 logo 与「预览版」已隐藏、标题居中;无页面报错 |
 | 运行部署 | ✅ 已装进 `$DSH_HOME/profiles/web`(link 方式),cordis.patch.yml 已加行,服务端热重载已生效 |
 | 未提交改动 | 无(全部已提交) |
 
@@ -32,12 +33,12 @@ dsh-sfw/
 │   ├── mask.ts           # 共享纯逻辑:SfwConfig 类型/默认值/normalizeWireConfig(容错解析注入载荷)/maskProductName
 │   ├── index.ts          # node 半部:Config(schemastery)+ apply → httpServer.tapIndex(改写<title>+注入 window.__DSH_SFW__)
 │   └── client/
-│       ├── index.ts      # 浏览器入口:{ name, apply } → 启动标题掩蔽 + 字标替换
-│       └── dom.ts        # patchTitle(setter 拦截)/patchWordmark(清空 SVG + 注入 <text>)/startWordmarkMasking(observer)
+│       ├── index.ts      # 浏览器入口:{ name, apply } → 启动标题掩蔽 + 字标替换 + hero 清理
+│       └── dom.ts        # patchTitle(setter 拦截)/patchWordmark(清空 SVG + 注入 <text>,字号可配)/startWordmarkMasking(observer)/patchHeroChrome + startHeroCleanup(hero 鱼 logo 与预览版徽章隐藏)
 └── tests/
-    ├── mask.spec.ts      # 配置解析、productName 掩蔽
+    ├── mask.spec.ts      # 配置解析、productName 掩蔽、wordmarkSize 校验
     ├── index-tap.spec.ts # index.html 标题改写 + 载荷注入/转义
-    └── dom.spec.ts       # jsdom:字标替换(含后代扫描回归)、标题 setter、不碰普通文本
+    └── dom.spec.ts       # jsdom:字标替换(含后代扫描回归)、字号/基线、hero 清理、标题 setter、不碰普通文本
 ```
 
 ## 4. 架构与关键机制(新接手必读)
@@ -49,9 +50,10 @@ dsh-sfw/
    - 把完整配置以 `<script>window.__DSH_SFW__ = {...}</script>` 注入 `<head>`(与 `__DSH_BOOT__` 同一条注入通道;`<` 转义为 `\u003c`)。
 2. **浏览器半部**(`src/client/`):因为 `package.json` 里声明了 `dshClient`,宿主 `dsh-client-modules` 自动把它编译好的 `lib/client.js` 挂进浏览器加载图(`__DSH_BOOT__` 出现 `dsh-sfw` 行,`/plugins/dsh-sfw/client.js` 提供服务)。浏览器端 cordis 加载该 bundle(要求 CJS + `window.__ModuleLoader__.load({id, factory})` 包装,tsdown 配置已处理),`apply` 启动:
    - `patchTitle`:`document.title` 的 setter 拦截,任何赋值(会话标题投影)都会过 `DeepSeek Harness → productName`;
-   - `startWordmarkMasking`:MutationObserver 全文档监听,任何**新增子树内的所有后代 svg** 都会检查是否为字标(`#dsh-wordmark-whale-clip` 特征),是则 `patchWordmark`。
+   - `startWordmarkMasking`:MutationObserver 全文档监听,任何**新增子树内的所有后代 svg** 都会检查是否为字标(`#dsh-wordmark-whale-clip` 特征),是则 `patchWordmark`;
+   - `startHeroCleanup`:同一 observer 模式,任何新增子树内找到文本为「开始构建吧」的行(hero 标题行),把行内 `viewBox="0 0 23.16 17.04"` 的鱼 logo 与「预览版」徽章 `display:none`,并把行从三列 grid 改成居中 flex(否则去掉两侧元素后标题会偏位)。锚点是中文文案,宿主改文案会失效(已知限制)。
 
-**字标替换原理**(`patchWordmark`):识别后 `svg.replaceChildren()` 清空全部原始内容(鲸鱼、字母、铭牌、defs 全部移除),再 `createElementNS` 注入居中 `<text data-dsh-sfw-wordmark>`。SVG 元素本身保留(尺寸 182×24 不动),外层按钮(新建会话)不受影响。React 只 diff 它知道的 props,组件 props 恒定 → 重渲染不会回写/重插;按钮整体重挂载时 observer 会再次处理(幂等标记 `data-dsh-sfw-wordmark` 防止重复注入)。
+**字标替换原理**(`patchWordmark`):识别后 `svg.replaceChildren()` 清空全部原始内容(鲸鱼、字母、铭牌、defs 全部移除),再 `createElementNS` 注入居中 `<text data-dsh-sfw-wordmark>`,字号/基线/字距随 `wordmarkSize` 缩放(基线按实测字体度量线性外推,bbox 中心保持 y≈11、x=91)。SVG 元素本身保留(尺寸 182×24 不动),外层按钮(新建会话)不受影响。React 只 diff 它知道的 props,组件 props 恒定 → 重渲染不会回写/重插;按钮整体重挂载时 observer 会再次处理(幂等标记 `data-dsh-sfw-wordmark` 防止重复注入)。hero 清理同理,靠 `data-dsh-sfw-hidden` 标记 + 行上标记保证幂等。
 
 **两个历史教训**(对应两次修复,别倒退):
 
@@ -87,16 +89,17 @@ dsh-sfw/
         enabled: true          # 总开关
         productName: 'Harness' # 标签页标题替换名
         wordmark: 'opencode'   # 字标替换文字(空字符串 = 清空但不注入文字)
+        wordmarkSize: 18       # 字标字号(px,默认 18;改这里即可调大小)
 ```
 
-配置热重载即生效(刷新页面)。
+配置热重载即生效(刷新页面)。注意:`wordmarkSize` 是新增字段,运行中的 `dsh web` 还是旧 node 半部,注入载荷里没有它 → 客户端回退默认 18;等下次重启后才会随配置下发。
 
 ## 7. 日常迭代流程
 
 ```sh
 cd D:\githubs\deepseek\dsh-sfw
 pnpm run build    # tsdown 产出 lib/index.js + lib/client.js;tsc 产出 lib/types
-pnpm test         # vitest,21 个用例
+pnpm test         # vitest,29 个用例
 ```
 
 改完 client 代码 → build → 浏览器刷新。改完 node 代码 → build → 重启 `dsh web`。改完配置 → 直接刷新。
@@ -120,13 +123,15 @@ bun run D:\githubs\deepseek\test-shenjackyuanjie\agent-tmp\sfw-wordmark.mjs
 
 - 只覆盖浏览器界面;终端 `dsh` 启动横幅、URL 行、ACP/JSON-RPC 等其他表面不在范围(用户只要 webui)。
 - 欢迎页(`WelcomeNotice`)与引导弹窗(`DeepSeekOnboardingDialog`)里的同款字标也会被替换(同一 SVG 特征,自动覆盖)—— 这是预期行为。
-- favicon 与侧栏折叠态鲸鱼(`FishLogo`)未处理(用户未要求)。
+- favicon 与**侧栏折叠态**鲸鱼(`FishLogo`,不在 hero 行内)未处理(用户未要求;hero 里的鱼已按用户要求隐藏)。
+- hero 清理以中文文案「开始构建吧」「预览版」为锚点,宿主若改动文案会失效(需要时把锚点提成配置)。
 - 会话消息正文若出现 "DeepSeek Harness" 字样不会被改写(刻意)。
 - 若用户后续还想要其他表面被替换,扩展点:mask.ts 加字段 + node Config 加 schema 字段 + client apply 接线,并同步更新 README 与测试。
 
 ## 10. 下一步建议
 
-- 用户刷新页面确认效果(预计已生效)。
-- 下次自然重启 `dsh web` 时确认新 node 半部载荷(`__DSH_SFW__` 只剩 enabled/productName/wordmark)无回归。
-- 若用户想换字标文字/标题名,改 `cordis.patch.yml` 的 `config` 即可,无需改代码。
-- 若想连 favicon/折叠态鲸鱼一起处理,需要扩展 client 半部(它们是独立 SVG,不是 BrandWordmark)。
+- 用户刷新页面确认效果(hero 鱼/预览版已去、opencode 已加大;预计已生效)。
+- 若觉得 18px 还不够大/太大,改 `cordis.patch.yml` 的 `wordmarkSize` 即可,无需改代码。
+- 下次自然重启 `dsh web` 时确认新 node 半部载荷(`__DSH_SFW__` 多了 wordmarkSize)无回归。
+- 若想连侧栏折叠态鲸鱼/favicon 一起处理,需要扩展 client 半部(它们是独立 SVG,不在 hero 行内)。
+- 若宿主界面文案改动导致 hero 清理失效,把「开始构建吧」「预览版」锚点提成配置字段。

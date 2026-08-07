@@ -5,9 +5,10 @@
  * browser half reads that wire payload (falling back to these same defaults).
  *
  * Scope: the plugin only replaces the product branding — the top-left brand
- * wordmark svg (replaced with the `wordmark` lettering) and the browser tab
- * title. All other UI copy (model selector, provider names, settings,
- * message content) is left untouched.
+ * wordmark svg (replaced with the `wordmark` lettering at `wordmarkSize`), the
+ * browser tab title, and (per user request) the new-conversation hero chrome
+ * (the fish logo and the preview badge). All other UI copy (model selector,
+ * provider names, settings, message content) is left untouched.
  * @module dsh-sfw/mask
  */
 
@@ -19,11 +20,13 @@ export interface SfwConfig {
   productName: string
   /** Replacement wordmark lettering shown in place of the brand svg. */
   wordmark: string
+  /** Font size (px) of the wordmark lettering inside its 182×24 viewBox. */
+  wordmarkSize: number
 }
 
 /** The defaults both halves fall back to when configuration is absent. */
 export function defaultConfig(): SfwConfig {
-  return { enabled: true, productName: 'Harness', wordmark: 'opencode' }
+  return { enabled: true, productName: 'Harness', wordmark: 'opencode', wordmarkSize: 18 }
 }
 
 /**
@@ -46,6 +49,11 @@ export function normalizeWireConfig(wire: unknown): SfwConfig {
     wordmark: typeof record.wordmark === 'string' && record.wordmark !== ''
       ? record.wordmark
       : base.wordmark,
+    wordmarkSize: typeof record.wordmarkSize === 'number'
+      && Number.isFinite(record.wordmarkSize)
+      && record.wordmarkSize > 0
+      ? record.wordmarkSize
+      : base.wordmarkSize,
   }
 }
 

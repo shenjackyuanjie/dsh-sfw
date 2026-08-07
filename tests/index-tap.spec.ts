@@ -36,9 +36,9 @@ describe('transformIndex', () => {
     expect(injectedAt).toBeLessThan(headEnd)
   })
 
-  it('serializes only the enabled/productName fields', () => {
+  it('serializes only the plugin config fields', () => {
     const masked = transformIndex(SAMPLE_HTML, defaultConfig())
-    expect(masked).toContain('"enabled":true,"productName":"Harness"')
+    expect(masked).toContain('"enabled":true,"productName":"Harness","wordmark":"opencode","wordmarkSize":18')
     expect(masked).not.toContain('providerName')
     expect(masked).not.toContain('DeepSeek-V4-Flash')
   })
