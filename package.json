@@ -1,0 +1,45 @@
+{
+  "name": "dsh-sfw",
+  "version": "0.1.0",
+  "description": "dsh plugin that masks DeepSeek branding in the web GUI (title, wordmark letterforms, provider/model names) so the harness is not recognizable while it is still in private beta",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dshClient": {
+    "inject": [],
+    "platform": "web"
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.json",
+    "prepare": "tsdown && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "schemastery": "^3.18.0"
+  },
+  "peerDependencies": {
+    "cordis": "^4.0.0-rc.7"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "license": "MIT"
+}
