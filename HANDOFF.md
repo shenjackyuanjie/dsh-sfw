@@ -1,6 +1,6 @@
 # dsh-sfw 交接文档
 
-> 写于 2026-08-08。当前 HEAD:`0987aaf`(Bigger wordmark (configurable size) and strip hero fish + preview badge)。
+> 写于 2026-08-08。当前 HEAD:`91b542a`(Bigger wordmark (configurable size) and strip hero fish + preview badge)。
 
 ## 1. 这是什么
 
