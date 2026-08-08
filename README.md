@@ -9,6 +9,7 @@
 - 将左上角的 DeepSeek Harness SVG 换成可配置矢量字标
 - 然后把新对话页面的 deepseek logo 和 "预览版" 字样删掉了
 
+![dsh-sfw 界面效果](docs/assets/dsh-sfw-preview.png)
 
 插件分两半:
 
