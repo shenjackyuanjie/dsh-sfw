@@ -6,8 +6,9 @@
 
 目前
 
-- 将左上角的 DeepSeek Harness SVG 换成可配置矢量字标
+- 将左上角的 DeepSeek Harness SVG 换成可配置矢量字标（或选择只移除 HARNESS 铭牌、保留 DeepSeek 和 logo 的 harness-remove 模式）
 - 然后把新对话页面的 deepseek logo 和 "预览版" 字样删掉了
+- 三个处理面（字标 / 标签页标题 / 欢迎区）可各自独立开关
 
 ![dsh-sfw 界面效果](docs/assets/dsh-sfw-preview.png)
 
@@ -60,6 +61,16 @@ dsh-sfw:
   enabled: true          # 总开关,false 时全部关闭
   productName: 'Harness' # 标签页标题的替代产品名
   wordmark: 'opencode'   # 左上角字标，如 openclaw、harmes、reasonix
+  overlays:              # 各处理面独立开关（可省略，默认全开）
+    wordmark:
+      enabled: true
+      # replace:整体替换为配置字标;harness-remove:只移除 HARNESS 铭牌,
+      # 保留 DeepSeek 字母和鲸鱼 logo
+      mode: 'replace'
+    title:
+      enabled: true      # 浏览器标签页标题替换
+    hero:
+      enabled: true      # 新对话欢迎区(鱼形图标 + "预览版"徽章)
 ```
 
 2. `cordis.patch.yml` 的 entry config（作为 base；未在 settings.yaml 写出的
@@ -73,6 +84,14 @@ dsh-sfw:
         enabled: true          # 总开关,false 时全部关闭
         productName: 'Harness' # 标签页标题的替代产品名
         wordmark: 'opencode'   # 左上角字标，如 openclaw、harmes、reasonix
+        overlays:              # 各处理面独立开关（可省略，默认全开）
+          wordmark:
+            enabled: true
+            mode: 'replace'    # replace | harness-remove
+          title:
+            enabled: true
+          hero:
+            enabled: true
 ```
 
 > settings.yaml 是纯 YAML（settings-local 用 `yaml` 库解析），**不支持 `!!js`
@@ -87,8 +106,10 @@ dsh-sfw:
 ## 工作原理
 
 - 字标 SVG 的字母本来就是矢量路径。插件识别 `#dsh-wordmark-whale-clip` 后保留宿主持有的外层 SVG、清空原 children，再注入配置名称对应的路径。`opencode` 使用官方 `0 0 234 42` viewBox 和 16 条官方路径；其他名称由像素字库动态生成并按长度设置 viewBox。
+- `harness-remove` 模式不动 DeepSeek 字母与鲸鱼 logo，只移除 HARNESS 铭牌：引用 `#dsh-wordmark-badge-clip` 的文字组、作为 svg 直接子元素的铭牌底板 rect，以及铭牌 clipPath def。
 - OpenCode 原组件的 weak/base/strong 三档主题色映射为 `currentColor` 加透明度，在 DSH 的亮色和暗色主题中都沿用宿主文字颜色。按钮整体重挂载或 React 在现有 SVG 内恢复 children 时，观察器会再次处理；幂等标记保证不会重复注入。
 - 观察者扫描**新增子树内的所有后代 svg**(整个 UI 是一次性挂载的一棵大树,字标只是后代节点),并对全文档做一次初始扫描。
+- 三个处理面（字标 / 标题 / 欢迎区）由 `overlays` 独立开关：关闭的处理面完全不启动，宿主端在标题关闭时也不再改写 `<title>`（配置载荷仍会注入）。
 - 除 `document.title`、品牌字标 SVG 和欢迎区标题行样式外，不改写其他 DOM 内容。
 
 ## 已知限制
