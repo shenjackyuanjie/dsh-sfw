@@ -33,8 +33,41 @@ describe('normalizeWireConfig', () => {
       models: { 'DeepSeek-V4-Flash': 'V4-Flash' },
       extra: {},
     }
-    expect(normalizeWireConfig(oldShape))
-      .toEqual({ enabled: true, productName: 'Harness', wordmark: 'opencode' })
+    expect(normalizeWireConfig(oldShape)).toEqual(defaultConfig())
+  })
+})
+
+describe('normalizeWireConfig 的 overlays', () => {
+  it('缺省时全部处理面开启、字标为 replace 模式', () => {
+    expect(normalizeWireConfig(undefined).overlays).toEqual(defaultConfig().overlays)
+    expect(normalizeWireConfig({}).overlays).toEqual(defaultConfig().overlays)
+    expect(normalizeWireConfig({ overlays: null }).overlays).toEqual(defaultConfig().overlays)
+  })
+
+  it('接受部分 overlay 配置并补齐其余默认值', () => {
+    const parsed = normalizeWireConfig({
+      overlays: {
+        wordmark: { mode: 'harness-remove' },
+        title: { enabled: false },
+      },
+    })
+    expect(parsed.overlays.wordmark).toEqual({ enabled: true, mode: 'harness-remove' })
+    expect(parsed.overlays.title).toEqual({ enabled: false })
+    expect(parsed.overlays.hero).toEqual({ enabled: true })
+  })
+
+  it('忽略类型错误与未知模式字段', () => {
+    const parsed = normalizeWireConfig({
+      overlays: {
+        wordmark: { enabled: 'yes', mode: 'explode' },
+        title: { enabled: 0 },
+        hero: { enabled: 'no' },
+        extra: { enabled: false },
+      },
+    })
+    expect(parsed.overlays.wordmark).toEqual({ enabled: true, mode: 'replace' })
+    expect(parsed.overlays.title).toEqual({ enabled: true })
+    expect(parsed.overlays.hero).toEqual({ enabled: true })
   })
 })
 
