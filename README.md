@@ -39,6 +39,21 @@ dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw
 
 ## 配置
 
+配置有两个来源，按优先级叠加（后者覆盖前者）：
+
+1. `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace（settings 服务存在时；
+   变更**热生效**，下次页面加载即用新配置）：
+
+```yaml
+dsh-sfw:
+  enabled: true          # 总开关,false 时全部关闭
+  productName: 'Harness' # 标签页标题的替代产品名
+  wordmark: 'opencode'   # 左上角字标，如 openclaw、harmes、reasonix
+```
+
+2. `cordis.patch.yml` 的 entry config（作为 base；未在 settings.yaml 写出的
+   字段回落到这里）：
+
 ```yaml
 - insert:
     - id: dsh-sfw
@@ -48,6 +63,11 @@ dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw
         productName: 'Harness' # 标签页标题的替代产品名
         wordmark: 'opencode'   # 左上角字标，如 openclaw、harmes、reasonix
 ```
+
+> settings.yaml 是纯 YAML（settings-local 用 `yaml` 库解析），**不支持 `!!js`
+> JS 表达式**；`!!js` 只在 `cordis.patch.yml`（bundle patch 层，loader 求值）有效。
+> 两个来源的字段都可省略，未写出的字段取默认值；settings 服务缺失时（纯
+> cordis 装配/测试）只用来源 2。
 
 `opencode` 使用固定上游版本的官方 SVG 路径。其他名称由内置 5×7 像素字库
 生成纯 SVG path，支持英文字母、数字、空格、`-` 和 `_`；未知字符显示为 `?`。

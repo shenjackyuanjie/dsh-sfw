@@ -16,7 +16,7 @@
 
 | 项 | 状态 |
 |---|---|
-| 单元测试 | ✅ 35 个全绿(`pnpm test`) |
+| 单元测试 | ✅ 42 个全绿(`pnpm test`) |
 | 构建 | ✅ `pnpm run build` 通过,产出 `lib/index.js` + `lib/client.js` |
 | 真实浏览器验证 | ⚠️ 旧版文字方案曾通过 headless Edge(CDP)验证；新矢量路径方案仍需刷新运行页面做一次视觉确认 |
 | 运行部署 | ✅ 已装进 `$DSH_HOME/profiles/web`(link 方式),cordis.patch.yml 已加行,服务端热重载已生效 |
@@ -83,6 +83,19 @@ dsh-sfw/
 
 ## 6. 配置
 
+配置有两个来源，按优先级叠加（后者覆盖前者）：
+
+1. `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace（settings 服务存在时；变更**热生效**，下次页面加载即用新配置）：
+
+```yaml
+dsh-sfw:
+  enabled: true          # 总开关
+  productName: 'Harness' # 标签页标题替换名
+  wordmark: 'opencode'   # 可改为 openclaw、harmes、reasonix 或其他名称
+```
+
+2. `cordis.patch.yml` 的 entry config（作为 base；未在 settings.yaml 写出的字段回落到这里）：
+
 ```yaml
 - insert:
     - id: dsh-sfw
@@ -94,6 +107,8 @@ dsh-sfw/
 ```
 
 `opencode` 使用官方矢量资产，其他名称使用通用像素矢量字库。已移除旧的 `wordmarkSize`，尺寸由 SVG viewBox 自动适配。配置热重载后刷新页面即可生效。
+
+settings 接入说明（2026-08-09 改造）：`apply` 里用可选注入 `ctx.inject(['settings'], ...)` 挂接 settings 服务（结构接缝 `SettingsSeam`，不 import 私有包 `@deepseek-ai/dsh-settings`），以 cordis entry config 为 base 注册 `dsh-sfw` namespace；settings 服务缺失时回落 entry。settings.yaml 变更通过 `scope.watch` 热重挂载 `tapIndex` 变换（`enabled` 切 false 时摘除）。settings provider 分离（重载/卸载）时回落 entry 并重挂载；插件卸载时释放变换。测试见 `tests/settings.spec.ts`（真实 cordis 装配 + 桩服务）。
 
 ## 7. 日常迭代流程
 
