@@ -1,8 +1,9 @@
 /**
  * dsh-sfw 浏览器端：Web 启动图从 `/plugins/@shenjack/dsh-sfw/client.js` 加载的
  * 品牌隐藏插件入口。它读取宿主注入的 `window.__DSH_SFW__` 配置（缺失时使用本地
- * 默认值），然后启动标签页标题拦截、品牌字标替换和新对话欢迎区清理。这里不依赖
- * cordis 服务，全部处理面都在 DOM 中。
+ * 默认值），然后按 `overlays` 独立开关启动标签页标题拦截、品牌字标处理（替换
+ * 或仅移除 HARNESS 铭牌）和新对话欢迎区清理。这里不依赖 cordis 服务，全部
+ * 处理面都在 DOM 中。
  * @module @shenjack/dsh-sfw/client
  */
 
@@ -31,19 +32,22 @@ function readConfig(): SfwConfig {
 }
 
 /**
- * 浏览器插件主体：启动标题拦截、字标替换和欢迎区清理，并随插件 fiber 一同释放。
+ * 浏览器插件主体：按 `overlays` 开关启动标题拦截、字标处理与欢迎区清理，
+ * 并随插件 fiber 一同释放。
  * @param ctx 浏览器端 cordis 上下文；本插件不要求额外服务。
  */
 export function apply(ctx: Context): void {
   const config = readConfig()
   if (!config.enabled) return
   const mask = (text: string): string => maskProductName(text, config.productName)
-  const stopTitle = patchTitle(mask)
-  const stopWordmark = startWordmarkMasking(config.wordmark)
-  const stopHeroCleanup = startHeroCleanup()
+  const stopTitle = config.overlays.title.enabled ? patchTitle(mask) : undefined
+  const stopWordmark = config.overlays.wordmark.enabled
+    ? startWordmarkMasking(config.wordmark, config.overlays.wordmark.mode)
+    : undefined
+  const stopHeroCleanup = config.overlays.hero.enabled ? startHeroCleanup() : undefined
   ctx.effect(() => () => {
-    stopTitle()
-    stopWordmark()
-    stopHeroCleanup()
+    stopTitle?.()
+    stopWordmark?.()
+    stopHeroCleanup?.()
   }, 'dsh-sfw：品牌隐藏')
 }

@@ -123,6 +123,47 @@ describe('patchWordmark', () => {
   })
 })
 
+describe('patchWordmark 的 harness-remove 模式', () => {
+  it('只移除 HARNESS 铭牌并保留 DeepSeek 字母与鲸鱼 logo', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, WORDMARK, 'harness-remove')
+    // 铭牌：底板 rect、文字组、clipPath def 全部移除。
+    expect(svg.querySelector('#badge-plate')).toBeNull()
+    expect(svg.querySelector('#badge-letter')).toBeNull()
+    expect(svg.querySelector('#dsh-wordmark-badge-clip')).toBeNull()
+    // 鲸鱼 clipPath def 内的 rect 与深色底板不同，不属于铭牌，应保留。
+    expect([...svg.children].filter(child => child.tagName.toLowerCase() === 'rect'))
+      .toHaveLength(0)
+    // DeepSeek 部分：鲸鱼 clip 组、字母 path、鲸鱼 clipPath def 保留原位。
+    expect(svg.querySelector('#whale')).not.toBeNull()
+    expect(svg.querySelector('#letter-a')).not.toBeNull()
+    expect(svg.querySelector('#letter-b')).not.toBeNull()
+    expect(svg.querySelector('#dsh-wordmark-whale-clip')).not.toBeNull()
+    // 不注入任何替代路径。
+    expect(svg.querySelectorAll('[data-dsh-sfw-wordmark]')).toHaveLength(0)
+  })
+
+  it('具有幂等性且可在重挂载后再次移除', () => {
+    const svg = wordmarkSvg()
+    patchWordmark(svg, WORDMARK, 'harness-remove')
+    patchWordmark(svg, WORDMARK, 'harness-remove')
+    expect(svg.querySelector('#badge-plate')).toBeNull()
+    expect(svg.querySelector('#whale')).not.toBeNull()
+    // React 恢复 children 后再次移除。
+    svg.innerHTML = wordmarkSvg().innerHTML
+    patchWordmark(svg, WORDMARK, 'harness-remove')
+    expect(svg.querySelector('#badge-plate')).toBeNull()
+    expect(svg.querySelector('#whale')).not.toBeNull()
+  })
+
+  it('不处理缺少品牌 clipPath 的 SVG', () => {
+    const other = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    other.innerHTML = '<rect x="0" y="0" width="10" height="10" fill="currentColor"/>'
+    patchWordmark(other, WORDMARK, 'harness-remove')
+    expect(other.querySelector('rect')).not.toBeNull()
+  })
+})
+
 describe('startWordmarkMasking', () => {
   it('处理作为大型新增子树后代出现的字标', async () => {
     const stop = startWordmarkMasking(WORDMARK)
@@ -179,6 +220,24 @@ describe('startWordmarkMasking', () => {
     expect(document.body.textContent).toContain('DeepSeek (deepseek-official)')
     expect(document.querySelector('button')?.getAttribute('aria-label')).toBe('选择模型，当前 DeepSeek-V4-Flash，推理等级 High')
     expect(document.querySelector('input')?.getAttribute('placeholder')).toBe('deepseek-v4-pro')
+    stop()
+  })
+
+  it('harness-remove 模式处理重挂载的字标并保留 DeepSeek 部分', async () => {
+    const stop = startWordmarkMasking(WORDMARK, 'harness-remove')
+    document.body.appendChild(wordmarkSvg())
+    await flush()
+    const svg = document.querySelector('svg') as SVGSVGElement
+    expect(svg.querySelector('#badge-plate')).toBeNull()
+    expect(svg.querySelector('#whale')).not.toBeNull()
+    expect(svg.querySelector('#letter-a')).not.toBeNull()
+    // 重挂载后铭牌再次出现，观察器应再次移除。
+    document.body.innerHTML = ''
+    document.body.appendChild(wordmarkSvg())
+    await flush()
+    const remounted = document.querySelector('svg') as SVGSVGElement
+    expect(remounted.querySelector('#badge-plate')).toBeNull()
+    expect(remounted.querySelector('#whale')).not.toBeNull()
     stop()
   })
 })
