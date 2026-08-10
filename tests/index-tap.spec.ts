@@ -25,6 +25,34 @@ describe('transformIndex', () => {
     expect(neutral).toContain('<title>My Page</title>')
   })
 
+  it('overlays.title 关闭时不改写标题但仍注入配置', () => {
+    const config = {
+      ...defaultConfig(),
+      overlays: {
+        ...defaultConfig().overlays,
+        title: { enabled: false },
+      },
+    }
+    const masked = transformIndex(SAMPLE_HTML, config)
+    expect(masked).toContain('<title>DeepSeek Harness</title>')
+    expect(masked).toContain('"overlays":{"wordmark":{"enabled":true,"mode":"replace"},')
+    expect(masked).toContain('"title":{"enabled":false}')
+  })
+
+  it('载荷包含 overlays 独立开关与字标模式', () => {
+    const config = {
+      ...defaultConfig(),
+      overlays: {
+        wordmark: { enabled: true, mode: 'harness-remove' as const },
+        title: { enabled: true },
+        hero: { enabled: false },
+      },
+    }
+    const masked = transformIndex(SAMPLE_HTML, config)
+    expect(masked).toContain('"mode":"harness-remove"')
+    expect(masked).toContain('"hero":{"enabled":false}')
+  })
+
   it('把完整配置脚本紧跟 head 注入', () => {
     const masked = transformIndex(SAMPLE_HTML, defaultConfig())
     const headEnd = masked.indexOf('</head>')

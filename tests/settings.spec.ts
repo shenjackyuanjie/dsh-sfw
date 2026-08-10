@@ -154,6 +154,34 @@ describe('apply 的 settings.yaml 接入', () => {
     expect(latestPayload(state)).toContain('"productName":"Harness"')
   })
 
+  it('entry 未提供 overlays 时按默认值补齐', async () => {
+    const { state } = await mount({
+      entry: { enabled: true, productName: 'Harness', wordmark: 'foo' },
+      withSettings: false,
+    })
+    expect(latestPayload(state))
+      .toContain('"overlays":{"wordmark":{"enabled":true,"mode":"replace"},')
+    expect(latestPayload(state)).toContain('"title":{"enabled":true}')
+    expect(latestPayload(state)).toContain('"hero":{"enabled":true}')
+  })
+
+  it('settings 用户层可独立开关处理面与字标模式', async () => {
+    const { state } = await mount({
+      entry: { enabled: true, productName: 'Harness', wordmark: 'foo' },
+      seed: {
+        overlays: {
+          wordmark: { enabled: false, mode: 'harness-remove' },
+          hero: { enabled: false },
+        },
+      },
+    })
+    const payload = latestPayload(state)
+    expect(payload).toContain('"wordmark":{"enabled":false,"mode":"harness-remove"}')
+    expect(payload).toContain('"hero":{"enabled":false}')
+    // 未写出的 title 保持开启。
+    expect(payload).toContain('"title":{"enabled":true}')
+  })
+
   it('无 settings 服务时回落 cordis entry 配置', async () => {
     const { state } = await mount({
       entry: { enabled: true, productName: 'InnerAI', wordmark: 'foo' },

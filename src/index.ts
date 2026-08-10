@@ -6,7 +6,9 @@
  *
  * 配置来源按优先级叠加：schema 默认值 → cordis entry config → settings 服务
  * 存在时 `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace（见 {@link apply}）；
- * settings.yaml 变更会热重挂载 index 变换，下次请求即生效。
+ * settings.yaml 变更会热重挂载 index 变换，下次请求即生效。三个处理面（字标 /
+ * 标题 / 欢迎区）由 `overlays` 独立开关；标题关闭时宿主端也不再改写 `<title>`，
+ * 但始终注入完整配置载荷。
  *
  * 本插件必须作为宿主加载图中的 loader 条目存在，client-modules 才能发现
  * `dshClient` 声明并提供 `lib/client.js`。本文件就是该入口，不注册其他能力。
@@ -16,7 +18,8 @@
 import type { Context } from 'cordis'
 import z from 'schemastery'
 import {
-  defaultConfig, maskProductName, MAX_WORDMARK_LENGTH, type SfwConfig,
+  defaultConfig, maskProductName, normalizeWireConfig,
+  MAX_WORDMARK_LENGTH, type SfwConfig,
 } from './mask.ts'
 
 /** 稳定的 cordis 插件名，同时也是 Web 启动图中的条目 ID。 */
@@ -30,6 +33,22 @@ export const Config: z<SfwConfig> = z.object({
   enabled: z.boolean().default(true),
   productName: z.string().default('Harness'),
   wordmark: z.string().max(MAX_WORDMARK_LENGTH).default('opencode'),
+  overlays: z.object({
+    wordmark: z.object({
+      enabled: z.boolean().default(true),
+      mode: z.union([z.const('replace'), z.const('harness-remove')]).default('replace'),
+    }).default({ enabled: true, mode: 'replace' }),
+    title: z.object({
+      enabled: z.boolean().default(true),
+    }).default({ enabled: true }),
+    hero: z.object({
+      enabled: z.boolean().default(true),
+    }).default({ enabled: true }),
+  }).default({
+    wordmark: { enabled: true, mode: 'replace' },
+    title: { enabled: true },
+    hero: { enabled: true },
+  }),
 })
 
 /** 本插件使用的 httpServer 结构化接缝，无需导入宿主实现包。 */
@@ -57,7 +76,13 @@ const FIBER_UNLOADING = 5
 
 /** 配置是否与已生效配置相同（refresh 的幂等守卫，避免重复挂载同一变换）。 */
 function sameConfig(a: SfwConfig, b: SfwConfig): boolean {
-  return a.enabled === b.enabled && a.productName === b.productName && a.wordmark === b.wordmark
+  return a.enabled === b.enabled
+    && a.productName === b.productName
+    && a.wordmark === b.wordmark
+    && a.overlays.wordmark.enabled === b.overlays.wordmark.enabled
+    && a.overlays.wordmark.mode === b.overlays.wordmark.mode
+    && a.overlays.title.enabled === b.overlays.title.enabled
+    && a.overlays.hero.enabled === b.overlays.hero.enabled
 }
 
 /** 安全嵌入 JSON：转义 `<`，避免配置字符串逃逸所注入的 script 元素。 */
@@ -66,18 +91,21 @@ function escapeForScript(payload: string): string {
 }
 
 /**
- * 变换待返回的 index.html：先改写包含 DeepSeek 的 `<title>`，再把完整配置
- * 紧跟 `<head>` 注入；不存在 head 时则放在文档最前，与启动清单的兜底行为一致。
+ * 变换待返回的 index.html：先改写包含 DeepSeek 的 `<title>`（`overlays.title`
+ * 关闭时跳过），再把完整配置紧跟 `<head>` 注入；不存在 head 时则放在文档最前，
+ * 与启动清单的兜底行为一致。
  * @param html index.html 原文。
  * @param config 完整解析后的隐藏配置。
  * @returns 变换后的 HTML。
  */
 export function transformIndex(html: string, config: SfwConfig): string {
   let out = html
-  out = out.replace(/<title\b[^>]*>([\s\S]*?)<\/title>/i, (whole, inner: string) => {
-    const maskedInner = maskProductName(inner, config.productName)
-    return maskedInner === inner ? whole : whole.replace(inner, maskedInner)
-  })
+  if (config.overlays.title.enabled) {
+    out = out.replace(/<title\b[^>]*>([\s\S]*?)<\/title>/i, (whole, inner: string) => {
+      const maskedInner = maskProductName(inner, config.productName)
+      return maskedInner === inner ? whole : whole.replace(inner, maskedInner)
+    })
+  }
   const payload = escapeForScript(JSON.stringify(config))
   const script = `<script>window.__DSH_SFW__ = ${payload}</script>`
   const head = out.indexOf('<head>')
@@ -95,7 +123,9 @@ export function transformIndex(html: string, config: SfwConfig): string {
  * @param config 已应用模式默认值的插件配置。
  */
 export function apply(ctx: Context, config?: SfwConfig): void {
-  const entry = { ...defaultConfig(), ...config }
+  // 手工测试上下文传入的配置可能缺少 overlays 子树；用与浏览器端相同的归一
+  // 化补齐全部默认字段，保证后续读取结构完整。
+  const entry = normalizeWireConfig({ ...defaultConfig(), ...config })
   // 当前权威配置来源：settings 服务接入后指向其 scope，否则指向 entry。
   let current: () => SfwConfig = () => entry
   // 已注册的 index 变换释放器；每次重挂载前先释放旧变换。
