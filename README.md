@@ -26,16 +26,27 @@
 dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw
 ```
 
-然后在 `$DSH_HOME/profiles/web/cordis.patch.yml` 追加(新条目必须放在 `insert:` 列表里):
+然后把 `dsh-sfw` 加进 `$DSH_HOME/profiles/web/package.json` 的
+`dsh.profile.bundles` 列表(与 `@deepseek-ai/dsh-base` 等并列)。**无需编辑
+`cordis.patch.yml`**——插件自带 bundle patch(`dsh.bundle.patch` → 本仓库的
+`cordis.patch.yml`)会插入自身行，与 `session-persistence-rdb` 的装载方式一致:
 
-```yaml
-- insert:
-    - id: dsh-sfw
-      name: 'dsh-sfw'
-      config: {}
+```json
+"dsh": {
+  "profile": {
+    "bundles": [
+      "@deepseek-ai/dsh-base",
+      "@deepseek-ai/dsh-web-app",
+      "@morlay/session-persistence-rdb",
+      "dsh-sfw"
+    ]
+  }
+}
 ```
 
-改完配置热重载即生效;改完插件代码需重新 `pnpm run build`,然后刷新浏览器页面(客户端 bundle 每次请求都会重新读取;若长时间未生效再重启 `dsh web`)。
+配置写在 `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace(见下)。改完
+settings.yaml 热重载即生效；改完插件代码需重新 `pnpm run build`,然后刷新
+浏览器页面(客户端 bundle 每次请求都会重新读取;node 半部改动需重启 `dsh web`)。
 
 ## 配置
 

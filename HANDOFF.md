@@ -67,18 +67,10 @@ dsh-sfw/
 ## 5. 安装与运行状态(本机)
 
 - `$DSH_HOME = D:\githubs\deepseek\dsh`(环境变量已设)。
-- web profile:`D:\githubs\deepseek\dsh\profiles\web\`,其中 `cordis.patch.yml` 追加了(注意:新条目必须放 `insert:` 列表里,裸行只会被当作"修改已存在条目"然后报 entry not found):
-
-```yaml
-# dsh-sfw: mask DeepSeek branding in the web UI (title / wordmark / provider & model names).
-- insert:
-    - id: dsh-sfw
-      name: 'dsh-sfw'
-      config: {}
-```
-
 - 安装方式:`dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw`(profile/node_modules/dsh-sfw 是指向仓库的符号链接)。依赖(schemastery)从仓库自身 node_modules 解析。
-- 运行中的 `dsh web` 进程(3080 端口)通过 `source/current → staging-20260807T143306Z` 的 tsx 源码启动;profile 补丁层支持**配置热重载**,插件行变更会实时挂载(本插件就是这样在运行中生效的,无需重启)。
+- 加载方式(2026-08-09 改为 **bundle**,不再编辑 profile 的 cordis.patch.yml):把 `dsh-sfw` 加进 `D:\githubs\deepseek\dsh\profiles\web\package.json` 的 `dsh.profile.bundles`(与 `@deepseek-ai/dsh-base` 等并列);插件自带 `cordis.patch.yml`(`dsh.bundle.patch` manifest)插入自身行,与 `session-persistence-rdb` 同款。profile 的 `cordis.patch.yml` 无 dsh-sfw 条目。
+- 配置:只写 `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace(见 §6),热生效。
+- 运行中的 `dsh web` 进程(3080 端口)通过 `source/current → staging-20260807T143306Z` 的 tsx 源码启动;profile 补丁层支持**配置热重载**,插件行变更会实时挂载。
 - ⚠️ 注意:运行中的宿主加载的是**旧版 node 半部**(注入旧形状载荷,含 providerName 等多余字段)。新 client 的 `normalizeWireConfig` 容忍多余字段,所以一切正常;等下次重启 `dsh web` 后载荷会变精简。**改 node 半部代码后必须重启才生效;改 client 半部代码后重新 `pnpm run build` + 刷新页面即可**(`/plugins/*/client.js` 每次请求实时读盘,`cache-control: no-cache`)。
 
 ## 6. 配置

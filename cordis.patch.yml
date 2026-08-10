@@ -1,0 +1,10 @@
+# dsh-sfw bundle patch。
+#
+# 在 profile 的 dsh.profile.bundles 中列出本包后，本 patch 在 base 层之后
+# 生效，插入品牌隐藏插件行，无需编辑 profile 的 cordis.patch.yml。配置写在
+# $DSH_HOME/settings.yaml 的 `dsh-sfw` namespace（覆盖这里的空 config，热生效）；
+# 也可在 profile 的 cordis.patch.yml 按 id 覆盖 config。
+- insert:
+    - id: dsh-sfw
+      name: 'dsh-sfw'
+      config: {}
