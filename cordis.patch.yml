@@ -6,5 +6,5 @@
 # 也可在 profile 的 cordis.patch.yml 按 id 覆盖 config。
 - insert:
     - id: dsh-sfw
-      name: 'dsh-sfw'
+      name: '@shenjack/dsh-sfw'
       config: {}

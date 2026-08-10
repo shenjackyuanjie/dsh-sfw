@@ -26,7 +26,7 @@
 dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw
 ```
 
-然后把 `dsh-sfw` 加进 `$DSH_HOME/profiles/web/package.json` 的
+然后把 `@shenjack/dsh-sfw` 加进 `$DSH_HOME/profiles/web/package.json` 的
 `dsh.profile.bundles` 列表(与 `@deepseek-ai/dsh-base` 等并列)。**无需编辑
 `cordis.patch.yml`**——插件自带 bundle patch(`dsh.bundle.patch` → 本仓库的
 `cordis.patch.yml`)会插入自身行，与 `session-persistence-rdb` 的装载方式一致:
@@ -38,7 +38,7 @@ dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw
       "@deepseek-ai/dsh-base",
       "@deepseek-ai/dsh-web-app",
       "@morlay/session-persistence-rdb",
-      "dsh-sfw"
+      "@shenjack/dsh-sfw"
     ]
   }
 }
@@ -68,7 +68,7 @@ dsh-sfw:
 ```yaml
 - insert:
     - id: dsh-sfw
-      name: 'dsh-sfw'
+      name: '@shenjack/dsh-sfw'
       config:
         enabled: true          # 总开关,false 时全部关闭
         productName: 'Harness' # 标签页标题的替代产品名

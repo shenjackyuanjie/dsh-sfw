@@ -1,9 +1,9 @@
 /**
- * dsh-sfw 浏览器端：Web 启动图从 `/plugins/dsh-sfw/client.js` 加载的品牌隐藏
- * 插件入口。它读取宿主注入的 `window.__DSH_SFW__` 配置（缺失时使用本地默认值），
- * 然后启动标签页标题拦截、品牌字标替换和新对话欢迎区清理。这里不依赖 cordis
- * 服务，全部处理面都在 DOM 中。
- * @module dsh-sfw/client
+ * dsh-sfw 浏览器端：Web 启动图从 `/plugins/@shenjack/dsh-sfw/client.js` 加载的
+ * 品牌隐藏插件入口。它读取宿主注入的 `window.__DSH_SFW__` 配置（缺失时使用本地
+ * 默认值），然后启动标签页标题拦截、品牌字标替换和新对话欢迎区清理。这里不依赖
+ * cordis 服务，全部处理面都在 DOM 中。
+ * @module @shenjack/dsh-sfw/client
  */
 
 import type { Context } from 'cordis'

@@ -16,7 +16,7 @@
  *
  * 字标识别必须扫描新增子树的所有后代：React 会一次挂载整棵界面子树，SVG
  * 通常不是 MutationObserver 记录中的新增节点本身。
- * @module dsh-sfw/client/dom
+ * @module @shenjack/dsh-sfw/client/dom
  */
 
 import { resolveWordmark } from './wordmark.ts'

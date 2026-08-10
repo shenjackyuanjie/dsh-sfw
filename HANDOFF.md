@@ -26,7 +26,7 @@
 
 ```
 dsh-sfw/
-├── package.json          # name: dsh-sfw;dshClient 声明(platform: web);exports ./client → lib/client.js
+├── package.json          # name: @shenjack/dsh-sfw;dshClient 声明(platform: web);exports ./client → lib/client.js
 ├── tsconfig.json         # strict;allowImportingTsExtensions;emitDeclarationOnly → lib/types
 ├── tsdown.config.ts      # 双构建:node 半部 lib/index.js(ESM)+ client 半部 lib/client.js(CJS + __ModuleLoader__ 包装)
 ├── src/
@@ -50,7 +50,7 @@ dsh-sfw/
 1. **node 半部**(`src/index.ts`):在宿主里以插件行加载(见 §5)。`apply` 里 `ctx.httpServer.tapIndex()` 注册一个 index.html 变换:
    - 把 `<title>DeepSeek Harness</title>` 直接改写为 `productName`(JS 加载前标签页就不露馅);
    - 把完整配置以 `<script>window.__DSH_SFW__ = {...}</script>` 注入 `<head>`(与 `__DSH_BOOT__` 同一条注入通道;`<` 转义为 `\u003c`)。
-2. **浏览器半部**(`src/client/`):因为 `package.json` 里声明了 `dshClient`,宿主 `dsh-client-modules` 自动把它编译好的 `lib/client.js` 挂进浏览器加载图(`__DSH_BOOT__` 出现 `dsh-sfw` 行,`/plugins/dsh-sfw/client.js` 提供服务)。浏览器端 cordis 加载该 bundle(要求 CJS + `window.__ModuleLoader__.load({id, factory})` 包装,tsdown 配置已处理),`apply` 启动:
+2. **浏览器半部**(`src/client/`):因为 `package.json` 里声明了 `dshClient`,宿主 `dsh-client-modules` 自动把它编译好的 `lib/client.js` 挂进浏览器加载图(`__DSH_BOOT__` 出现 `@shenjack/dsh-sfw` 行,`/plugins/@shenjack/dsh-sfw/client.js` 提供服务)。浏览器端 cordis 加载该 bundle(要求 CJS + `window.__ModuleLoader__.load({id, factory})` 包装,tsdown 配置已处理),`apply` 启动:
    - `patchTitle`:`document.title` 的 setter 拦截,任何赋值(会话标题投影)都会过 `DeepSeek Harness → productName`;
    - `startWordmarkMasking`:MutationObserver 全文档监听,任何**新增子树内的所有后代 svg** 都会检查是否为字标(`#dsh-wordmark-whale-clip` 特征),是则 `patchWordmark`;
    - `startHeroCleanup`:同一 observer 模式,任何新增子树内找到文本为「开始构建吧」的行(hero 标题行),把行内 `viewBox="0 0 23.16 17.04"` 的鱼 logo 与「预览版」徽章 `display:none`,并把行从三列 grid 改成居中 flex(否则去掉两侧元素后标题会偏位)。锚点是中文文案,宿主改文案会失效(已知限制)。
@@ -67,8 +67,8 @@ dsh-sfw/
 ## 5. 安装与运行状态(本机)
 
 - `$DSH_HOME = D:\githubs\deepseek\dsh`(环境变量已设)。
-- 安装方式:`dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw`(profile/node_modules/dsh-sfw 是指向仓库的符号链接)。依赖(schemastery)从仓库自身 node_modules 解析。
-- 加载方式(2026-08-09 改为 **bundle**,不再编辑 profile 的 cordis.patch.yml):把 `dsh-sfw` 加进 `D:\githubs\deepseek\dsh\profiles\web\package.json` 的 `dsh.profile.bundles`(与 `@deepseek-ai/dsh-base` 等并列);插件自带 `cordis.patch.yml`(`dsh.bundle.patch` manifest)插入自身行,与 `session-persistence-rdb` 同款。profile 的 `cordis.patch.yml` 无 dsh-sfw 条目。
+- 安装方式:`dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw`(profile/node_modules/@shenjack/dsh-sfw 是指向仓库的符号链接)。依赖(schemastery)从仓库自身 node_modules 解析。
+- 加载方式(2026-08-09 改为 **bundle**,不再编辑 profile 的 cordis.patch.yml):把 `@shenjack/dsh-sfw` 加进 `D:\githubs\deepseek\dsh\profiles\web\package.json` 的 `dsh.profile.bundles`(与 `@deepseek-ai/dsh-base` 等并列);插件自带 `cordis.patch.yml`(`dsh.bundle.patch` manifest)插入自身行,与 `session-persistence-rdb` 同款。profile 的 `cordis.patch.yml` 无 dsh-sfw 条目。
 - 配置:只写 `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace(见 §6),热生效。
 - 运行中的 `dsh web` 进程(3080 端口)通过 `source/current → staging-20260807T143306Z` 的 tsx 源码启动;profile 补丁层支持**配置热重载**,插件行变更会实时挂载。
 - ⚠️ 注意:运行中的宿主加载的是**旧版 node 半部**(注入旧形状载荷,含 providerName 等多余字段)。新 client 的 `normalizeWireConfig` 容忍多余字段,所以一切正常;等下次重启 `dsh web` 后载荷会变精简。**改 node 半部代码后必须重启才生效;改 client 半部代码后重新 `pnpm run build` + 刷新页面即可**(`/plugins/*/client.js` 每次请求实时读盘,`cache-control: no-cache`)。
@@ -91,7 +91,7 @@ dsh-sfw:
 ```yaml
 - insert:
     - id: dsh-sfw
-      name: 'dsh-sfw'
+      name: '@shenjack/dsh-sfw'
       config:
         enabled: true          # 总开关
         productName: 'Harness' # 标签页标题替换名

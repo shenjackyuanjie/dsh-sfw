@@ -9,8 +9,8 @@
  */
 import type { UserConfig } from 'tsdown'
 
-/** 插件包 ID，同时也是 Web 启动图中的 loader 条目名。 */
-const PLUGIN_ID = 'dsh-sfw'
+/** 插件包 ID，同时也是 Web 启动图中的 loader 条目名（= npm 包名）。 */
+const PLUGIN_ID = '@shenjack/dsh-sfw'
 
 const configs: UserConfig[] = [
   {

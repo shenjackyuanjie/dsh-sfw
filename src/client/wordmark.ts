@@ -1,7 +1,7 @@
 /**
  * 可配置字标的纯矢量生成器。OpenCode 使用固定上游版本的官方路径；其他名称
  * 使用内置 5×7 像素字库转换为 SVG path，因此不依赖系统字体或覆盖层。
- * @module dsh-sfw/client/wordmark
+ * @module @shenjack/dsh-sfw/client/wordmark
  */
 
 /** 一条字标路径及其相对主题色透明度。 */

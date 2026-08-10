@@ -10,7 +10,7 @@
  *
  * 本插件必须作为宿主加载图中的 loader 条目存在，client-modules 才能发现
  * `dshClient` 声明并提供 `lib/client.js`。本文件就是该入口，不注册其他能力。
- * @module dsh-sfw
+ * @module @shenjack/dsh-sfw
  */
 
 import type { Context } from 'cordis'
