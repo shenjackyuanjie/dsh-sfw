@@ -11,7 +11,7 @@
  * 但始终注入完整配置载荷。
  *
  * 本插件必须作为宿主加载图中的 loader 条目存在，client-modules 才能发现
- * `dshClient` 声明并提供 `lib/client.js`。本文件就是该入口，不注册其他能力。
+ * `dsh.client` 声明并提供 `lib/client.js`。本文件就是该入口，不注册其他能力。
  * @module @shenjack/dsh-sfw
  */
 
