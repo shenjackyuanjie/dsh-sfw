@@ -17,7 +17,8 @@
 - **node 半部**(宿主侧):通过 `httpServer.tapIndex` 改写被服务的 `index.html` —— 把 `<title>DeepSeek Harness</title>` 直接换成产品名(JS 加载前标签页就不会露馅),并把配置以 `window.__DSH_SFW__` 注入页面(与 `__DSH_BOOT__` 同一条注入通道)。
 - **浏览器半部**(客户端):`document.title` 拦截 setter(会话标题的 `xxx — DeepSeek Harness` 也会被掩蔽);并把侧边栏/欢迎页/引导弹窗里的品牌字标 SVG 就地替换为配置的矢量字标。宿主 SVG 外壳、按钮行为和主题色继承保持不变，不触碰任何普通文本节点或属性。
 
-只要插件包声明了 `dshClient`,宿主 `dsh-client-modules` 会自动把它编译好的 `lib/client.js` 挂进浏览器端的加载图,无需改动 dsh 本体。
+只要插件包声明了 `dsh.client`（package.json 的 `dsh` 字段下）,宿主 `dsh-client-modules`
+会自动把它编译好的 `lib/client.js` 挂进浏览器端的加载图,无需改动 dsh 本体。
 
 ## 安装
 
