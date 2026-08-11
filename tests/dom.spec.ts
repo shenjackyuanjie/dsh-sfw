@@ -250,7 +250,7 @@ describe('patchHeroChrome', () => {
       <svg width="34" height="25" viewBox="0 0 23.16 17.04" fill="none" aria-hidden="true">
         <path d="M22.9168 1.43018Z" fill="currentColor"/>
       </svg>
-      <span>开始构建吧</span>
+      <span>探索未知之境</span>
       <span>预览版</span>
     `
     return headline
@@ -266,7 +266,7 @@ describe('patchHeroChrome', () => {
     expect(badge.style.display).toBe('none')
     expect(fish.getAttribute('data-dsh-sfw-hidden')).toBe('true')
     expect(badge.getAttribute('data-dsh-sfw-hidden')).toBe('true')
-    expect(text.textContent).toBe('开始构建吧')
+    expect(text.textContent).toBe('探索未知之境')
     expect(text.style.display).not.toBe('none')
     // 标题行改为居中 flex 后，剩余文本仍位于视觉中心。
     expect(headline.style.display).toBe('flex')
@@ -305,7 +305,7 @@ describe('startHeroCleanup', () => {
     const headline = document.createElement('div')
     headline.innerHTML = `
       <svg width="34" height="25" viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>
-      <span>开始构建吧</span>
+      <span>探索未知之境</span>
       <span>预览版</span>
     `
     document.body.appendChild(headline)
@@ -322,7 +322,7 @@ describe('startHeroCleanup', () => {
       const headline = document.createElement('div')
       headline.innerHTML = `
         <svg width="34" height="25" viewBox="0 0 23.16 17.04"><path d="M1 1Z"/></svg>
-        <span>开始构建吧</span>
+        <span>探索未知之境</span>
         <span>预览版</span>
       `
       document.body.appendChild(headline)

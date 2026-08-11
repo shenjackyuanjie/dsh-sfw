@@ -39,7 +39,7 @@ function heroRow(): HTMLElement {
     <svg width="34" height="25" viewBox="0 0 23.16 17.04" fill="none" aria-hidden="true">
       <path d="M22.9168 1.43018Z" fill="currentColor"/>
     </svg>
-    <span>开始构建吧</span>
+    <span>探索未知之境</span>
     <span>预览版</span>
   `
   return headline

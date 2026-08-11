@@ -11,7 +11,7 @@
  *   鲸鱼 logo（`mode: 'harness-remove'`）。原字标的鲸鱼、字母和 HARNESS 铭牌
  *   会整体移除，再注入生成后的路径。宿主持有的 SVG 外壳保持不变，因此外层
  *   按钮的尺寸、aria-label 和点击处理均不受影响。按钮整体重挂载时会再次替换。
- * - `startHeroCleanup` 隐藏“开始构建吧”标题行中的鱼形图标和“预览版”徽章，
+ * - `startHeroCleanup` 隐藏“探索未知之境”标题行中的鱼形图标和“预览版”徽章，
  *   并把标题行改为居中 flex。这里只写入行内样式，不删除 React 节点；重渲染
  *   或重挂载后仍可再次处理。
  *
@@ -41,8 +41,8 @@ const FISH_VIEWBOX = '0 0 23.16 17.04'
 /** 隐藏欢迎区元素时使用的幂等标记属性。 */
 const HIDDEN_MARKER = 'data-dsh-sfw-hidden'
 
-/** 欢迎区标题文案，对应 locales.ts 中的 `hero.headline`。 */
-const HERO_HEADLINE = '开始构建吧'
+/** 欢迎区标题文案，对应 locales.ts 中的 `hero.headline`（2026-08-10 起为「探索未知之境」）。 */
+const HERO_HEADLINE = '探索未知之境'
 
 /** 欢迎区预览徽章文案，对应 locales.ts 中的 `hero.preview`。 */
 const HERO_PREVIEW = '预览版'
