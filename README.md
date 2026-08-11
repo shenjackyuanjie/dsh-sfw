@@ -1,5 +1,8 @@
 # dsh-sfw
 
+> ⚠️ **弃用公告**：dsh-sfw 即将弃用，停止维护。后续动态请看
+> [https://github.com/dsh-external/issues/discussions/566](https://github.com/dsh-external/issues/discussions/566)
+
 同志们！dsh-sfw！防止你的同学/同事/好bro 发现你在内测dsh
 
 然后 gank 你 让你说出 dsh 的秘密()
