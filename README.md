@@ -49,15 +49,27 @@ dsh plugin --profile web add link:D:\githubs\deepseek\dsh-sfw
 }
 ```
 
-配置写在 `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace(见下)。改完
-settings.yaml 热重载即生效；改完插件代码需重新 `pnpm run build`,然后刷新
-浏览器页面(客户端 bundle 每次请求都会重新读取;node 半部改动需重启 `dsh web`)。
+配置写在 `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace(见下)，或直接在
+设置页的「插件配置」里改。改完 settings.yaml 热重载即生效；改完插件代码需
+重新 `pnpm run build`,然后刷新浏览器页面(客户端 bundle 每次请求都会重新读取;
+node 半部改动需重启 `dsh web`)。
+
+> **部署前提**：设置页的配置卡片要能读写，DSH 的 api-proxy 必须把 `dsh-sfw`
+> 放进其 Web settings allowlist（`packages/host/apiproxy/src/api-proxy.ts` 的
+> `WEB_SETTINGS_NAMESPACES`）。这是 DSH 侧的显式放行，注册 namespace 本身
+> 不会让浏览器拿到读写权；未放行时卡片不渲染（namespace 返回
+> `settings-not-exposed`）。
 
 ## 配置
 
 配置有两个来源，按优先级叠加（后者覆盖前者）：
 
-1. `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace（settings 服务存在时；
+1. **DSH 设置页的「插件配置」UI**（推荐）：浏览器端向设置页的「插件配置」
+   section 注册一张「品牌隐藏」卡片（`settings.plugin.item` slot）。卡片上的
+   保存即写入 settings 文档，效果与手改 settings.yaml 等价（字段进入用户层，
+   热生效）。可编辑：总开关、标签页产品名、左上角字标、字标处理模式，以及
+   三个处理面（字标 / 标题 / 欢迎区）的独立开关。
+2. `$DSH_HOME/settings.yaml` 的 `dsh-sfw` namespace（settings 服务存在时；
    变更**热生效**，下次页面加载即用新配置）：
 
 ```yaml
@@ -114,6 +126,7 @@ dsh-sfw:
 - OpenCode 原组件的 weak/base/strong 三档主题色映射为 `currentColor` 加透明度，在 DSH 的亮色和暗色主题中都沿用宿主文字颜色。按钮整体重挂载或 React 在现有 SVG 内恢复 children 时，观察器会再次处理；幂等标记保证不会重复注入。
 - 观察者扫描**新增子树内的所有后代 svg**(整个 UI 是一次性挂载的一棵大树,字标只是后代节点),并对全文档做一次初始扫描。
 - 三个处理面（字标 / 标题 / 欢迎区）由 `overlays` 独立开关：关闭的处理面完全不启动，宿主端在标题关闭时也不再改写 `<title>`（配置载荷仍会注入）。
+- 设置页配置卡片通过 cordis 服务协作，不导入任何 `@deepseek-ai/*` 包：`ctx.settingsScope` 绑定 `dsh-sfw` namespace 读取/写入，`ctx.slots` 把卡片注册进 `settings.plugin.item` slot。卡片样式直接使用 DSH 主题的 `--dsw-alias-*` token；客户端 bundle 只 external `react` / `react/jsx-runtime`（Web 外壳的冻结平台模块）。
 - 除 `document.title`、品牌字标 SVG 和欢迎区标题行样式外，不改写其他 DOM 内容。
 
 ## 已知限制
@@ -121,6 +134,8 @@ dsh-sfw:
 - 只覆盖浏览器界面;终端里 `dsh` 启动横幅、URL 行等文本不在范围内。
 - 侧栏折叠态鲸鱼和 favicon 是独立 SVG，目前不在字标替换范围内。
 - 标签页标题只替换完整的 `DeepSeek Harness` 拼写,不会误伤其他含 `DeepSeek` 的文本。
+- 设置页卡片要求 DSH api-proxy 放行 `dsh-sfw` namespace（见上文「部署前提」）；未放行的部署不渲染卡片，也不报错。
+- 卡片在「只读」部署（settings provider 只读）下显示只读提示并禁用控件。
 
 ## 开发
 

@@ -34,9 +34,16 @@ const configs: UserConfig[] = [
     dts: false,
     sourcemap: true,
     clean: false,
-    // 浏览器端没有外部运行时导入（不引入 react；cordis 仅导入类型并会被擦除），
-    // 因此不能保留 external，所有运行时依赖都必须内联到包中。
-    deps: { alwaysBundle: /./ },
+    // react 与 react/jsx-runtime 是 Web 外壳冻结模块表中的平台模块：卡片
+    // 组件通过注入的 require 拿到共享实例，绝不能内联第二份（重复 React 会
+    // 破坏 hooks）。其余运行时依赖（当前没有）必须内联到包中；类型导入在
+    // 打包时擦除，不产生 require。
+    external: ['react', 'react/jsx-runtime'],
+    deps: {
+      alwaysBundle: (id: string) => {
+        return id === 'react' || id === 'react/jsx-runtime' ? undefined : true
+      },
+    },
     define: {
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
       'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),

@@ -1,6 +1,6 @@
 # dsh-sfw 交接文档
 
-> 写于 2026-08-08，最近更新于 dsh 0810 适配（dshClient → dsh.client manifest、hero 锚点「探索未知之境」）。
+> 写于 2026-08-08，最近更新于 2026-08-12（设置页「插件配置」卡片接入）。
 
 ## 1. 这是什么
 
@@ -17,32 +17,39 @@
 
 | 项 | 状态 |
 |---|---|
-| 单元测试 | ✅ 60 个全绿(`pnpm test`) |
+| 单元测试 | ✅ 80 个全绿(`pnpm test`) |
 | 构建 | ✅ `pnpm run build` 通过,产出 `lib/index.js` + `lib/client.js` |
-| 真实浏览器验证 | ⚠️ 旧版文字方案曾通过 headless Edge(CDP)验证；新矢量路径方案仍需刷新运行页面做一次视觉确认 |
+| 真实浏览器验证 | ⚠️ 字标/标题/hero 已多次人工确认；设置页卡片需刷新运行页面做一次视觉确认 |
 | 运行部署 | ✅ 已装进 `$DSH_HOME/profiles/web`(link 方式),cordis.patch.yml 已加行,服务端热重载已生效 |
-| 未提交改动 | 无(全部已提交) |
+| DSH 侧放行 | ✅ `dsh-sfw` 已加入 api-proxy 的 `WEB_SETTINGS_NAMESPACES`(test-shenjackyuanjie + staging 同步) |
+| 未提交改动 | dsh-sfw:设置页卡片(未提交)；DSH:api-proxy allowlist(未提交) |
 
 ## 3. 仓库结构与文件职责
 
 ```
 dsh-sfw/
 ├── package.json          # name: @shenjack/dsh-sfw;dsh.client 声明(platform: web)+ dsh.bundle.patch;exports ./client → lib/client.js
-├── tsconfig.json         # strict;allowImportingTsExtensions;emitDeclarationOnly → lib/types
-├── tsdown.config.ts      # 双构建:node 半部 lib/index.js(ESM)+ client 半部 lib/client.js(CJS + __ModuleLoader__ 包装)
+├── tsconfig.json         # strict;jsx: react-jsx;allowImportingTsExtensions;emitDeclarationOnly → lib/types
+├── tsdown.config.ts      # 双构建:node 半部 lib/index.js(ESM)+ client 半部 lib/client.js(CJS + __ModuleLoader__ 包装;external react/react-jsx-runtime)
 ├── src/
 │   ├── mask.ts           # 共享纯逻辑:SfwConfig 类型/默认值/normalizeWireConfig(容错解析注入载荷)/overlays 归一化/maskProductName
 │   ├── index.ts          # node 半部:Config(schemastery)+ apply → httpServer.tapIndex(改写<title>+注入 window.__DSH_SFW__)
 │   └── client/
-│       ├── index.ts      # 浏览器入口:{ name, apply } → 按 overlays 启动标题掩蔽 + 字标处理 + hero 清理
+│       ├── index.ts      # 浏览器入口:{ name, apply } → 品牌隐藏 + ctx.inject 注册设置页配置卡片
 │       ├── dom.ts        # patchTitle(setter 拦截)/patchWordmark(注入路径或移除铭牌)/removeHarnessBadge/startWordmarkMasking(observer)/hero 清理
-│       └── wordmark.ts   # OpenCode 官方路径 + 通用 5×7 像素矢量字库
+│       ├── wordmark.ts   # OpenCode 官方路径 + 通用 5×7 像素矢量字库
+│       ├── seams.ts      # DSH 客户端服务结构缝:slots/settingsScope/locale/connection 最小类型 + cordis Context merge(零 @deepseek-ai 依赖)
+│       ├── config-form.ts# 设置页卡片表单模型:SfwCardForm(分阶段草稿 + 嵌套路径 ops + mutate 保存)+ SFW_CARD_SPECS(7 个字段)
+│       ├── config-card.tsx # 卡片 React 组件(内联 --dsw-alias-* token 样式,不引 CSS Modules)
+│       └── locales.ts    # 卡片文案字典(zh/en),注册到 dsh-sfw.config locale namespace
 └── tests/
     ├── mask.spec.ts      # 配置解析(含 overlays 归一化)与 productName 掩蔽
     ├── index-tap.spec.ts # index.html 标题改写(含 title 开关) + 载荷注入/转义
     ├── dom.spec.ts       # jsdom:矢量字标替换、harness-remove、重挂载回归、hero 清理、标题 setter、不碰普通文本
     ├── settings.spec.ts  # settings.yaml 接入:覆盖优先级、热变更、enabled 切换、卸载清理、overlays 传播
     ├── client-apply.spec.ts # jsdom + cordis:overlays 独立开关在 DOM 上的实际效果与释放
+    ├── config-form.spec.ts # 卡片表单:字段渲染/覆盖标记/保存 ops(顶层+嵌套路径)/无效阻止/失败保留草稿
+    ├── config-card.spec.tsx # jsdom + testing-library:卡片渲染/展开/按钮状态/开关与下拉回调
     └── wordmark.spec.ts  # OpenCode 官方路径与通用像素字库
 ```
 
