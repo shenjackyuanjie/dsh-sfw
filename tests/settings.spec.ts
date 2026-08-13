@@ -1,7 +1,7 @@
 /**
  * settings.yaml 接入测试：用真实 cordis Context 装配可选 settings 服务，断言
  * tapIndex 变换的载荷（覆盖优先级）、live 更新、enabled 切换与卸载清理。
- * httpServer 与 settings 均以测试桩提供；变换输出断言沿用 index-tap.spec.ts
+ * webServer 与 settings 均以测试桩提供；变换输出断言沿用 index-tap.spec.ts
  * 的 `window.__DSH_SFW__` 载荷形状。
  */
 import { Context } from 'cordis'
@@ -22,8 +22,8 @@ const SAMPLE_HTML = `<!doctype html>
 </html>
 `
 
-/** 记录 tapIndex 变换注册/释放历史的 httpServer 测试桩。 */
-function recorderHttpServer(): {
+/** 记录 tapIndex 变换注册/释放历史的 webServer 测试桩。 */
+function recorderWebServer(): {
   state: {
     /** 全部注册历史（含已释放的变换）。 */
     registrations: Array<(html: string) => string>
@@ -31,7 +31,7 @@ function recorderHttpServer(): {
     live: Array<(html: string) => string>
     disposals: number
   }
-  httpServer: { tapIndex(transform: (html: string) => string): () => void }
+  webServer: { tapIndex(transform: (html: string) => string): () => void }
 } {
   const state = {
     registrations: [] as Array<(html: string) => string>,
@@ -40,7 +40,7 @@ function recorderHttpServer(): {
   }
   return {
     state,
-    httpServer: {
+    webServer: {
       tapIndex(transform) {
         state.registrations.push(transform)
         state.live.push(transform)
@@ -95,7 +95,7 @@ function fakeSettings(): {
   }
 }
 
-const pluginObject = { name: 'dsh-sfw', Config, inject: ['httpServer'], apply }
+const pluginObject = { name: 'dsh-sfw', Config, inject: ['webServer'], apply }
 
 /** 让 cordis 的 fiber 加载微任务（含 apply 内嵌套的 inject fiber）全部落地。 */
 const flush = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
@@ -110,7 +110,7 @@ function latestPayload(state: { live: Array<(html: string) => string> }): string
   return html.slice(start, html.indexOf('</script>'))
 }
 
-/** 装配一个真实 cordis 上下文：提供 httpServer 桩，按需提供 settings 桩。 */
+/** 装配一个真实 cordis 上下文：提供 webServer 桩，按需提供 settings 桩。 */
 async function mount(options: {
   entry?: SfwConfig
   withSettings?: boolean
@@ -125,8 +125,8 @@ async function mount(options: {
   dispose: () => Promise<void>
 }> {
   const ctx = new Context()
-  const recorder = recorderHttpServer()
-  ctx.provide('httpServer', recorder.httpServer)
+  const recorder = recorderWebServer()
+  ctx.provide('webServer', recorder.webServer)
   let settings: ReturnType<typeof fakeSettings> | undefined
   if (options.withSettings !== false) {
     settings = fakeSettings()

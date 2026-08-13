@@ -26,7 +26,7 @@ import {
 export const name = 'dsh-sfw'
 
 /** 注册 index 改写前必须可用的服务。 */
-export const inject = ['httpServer']
+export const inject = ['webServer']
 
 /** 插件配置：品牌隐藏选项，参见 {@link SfwConfig}。 */
 export const Config: z<SfwConfig> = z.object({
@@ -51,8 +51,8 @@ export const Config: z<SfwConfig> = z.object({
   }),
 })
 
-/** 本插件使用的 httpServer 结构化接缝，无需导入宿主实现包。 */
-interface HttpServerSeam {
+/** 本插件使用的 webServer 结构化接缝，无需导入宿主实现包。 */
+interface WebServerSeam {
   /** 注册对每次 index.html 响应生效的变换。 */
   tapIndex(transform: (html: string) => string): () => void
 }
@@ -119,7 +119,7 @@ export function transformIndex(html: string, config: SfwConfig): string {
  * settings.yaml 变更会热重挂载变换，下次 index.html 请求即生效。loader 会应用
  * Config 模式中的默认值；此处再次显式合并，让没有传入配置的手工测试上下文
  * 也能正常运行。
- * @param ctx 已注入 httpServer 服务的宿主插件上下文。
+ * @param ctx 已注入 webServer 服务的宿主插件上下文。
  * @param config 已应用模式默认值的插件配置。
  */
 export function apply(ctx: Context, config?: SfwConfig): void {
@@ -140,11 +140,11 @@ export function apply(ctx: Context, config?: SfwConfig): void {
     disposeIndex = undefined
     applied = resolved
     if (!resolved.enabled) return
-    const httpServer = (ctx as unknown as { httpServer?: HttpServerSeam }).httpServer
-    if (httpServer === undefined) {
-      throw new Error('dsh-sfw：httpServer 服务不可用（插件已声明 inject）')
+    const webServer = (ctx as unknown as { webServer?: WebServerSeam }).webServer
+    if (webServer === undefined) {
+      throw new Error('dsh-sfw：webServer 服务不可用（插件已声明 inject）')
     }
-    disposeIndex = httpServer.tapIndex(html => transformIndex(html, resolved))
+    disposeIndex = webServer.tapIndex(html => transformIndex(html, resolved))
   }
 
   // 插件自身 fiber 是否正在卸载：卸载中的回落/热更新会与最外层清理 effect

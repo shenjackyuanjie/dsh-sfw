@@ -1,7 +1,7 @@
 /**
  * DSH Web 客户端接缝（结构缝）：dsh-sfw 浏览器半部只通过 cordis 服务与 DSH
  * 协作（`ctx.slots` / `ctx.settingsScope` / `ctx.locale`），不导入任何
- * `@deepseek-ai/*` 包——与宿主半部对 `httpServer`/`settings` 的处理方式一致。
+ * `@deepseek-ai/*` 包——与宿主半部对 `webServer`/`settings` 的处理方式一致。
  * 这里用最小结构化类型描述用到的服务面，DSH 侧的运行时契约（slot 系统、
  * settings 传输、locale 注册）由各自的宿主实现提供。
  *

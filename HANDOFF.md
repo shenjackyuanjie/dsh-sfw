@@ -33,7 +33,7 @@ dsh-sfw/
 ├── tsdown.config.ts      # 双构建:node 半部 lib/index.js(ESM)+ client 半部 lib/client.js(CJS + __ModuleLoader__ 包装;external react/react-jsx-runtime)
 ├── src/
 │   ├── mask.ts           # 共享纯逻辑:SfwConfig 类型/默认值/normalizeWireConfig(容错解析注入载荷)/overlays 归一化/maskProductName
-│   ├── index.ts          # node 半部:Config(schemastery)+ apply → httpServer.tapIndex(改写<title>+注入 window.__DSH_SFW__)
+│   ├── index.ts          # node 半部:Config(schemastery)+ apply → webServer.tapIndex(改写<title>+注入 window.__DSH_SFW__)
 │   └── client/
 │       ├── index.ts      # 浏览器入口:{ name, apply } → 品牌隐藏 + ctx.inject 注册设置页配置卡片
 │       ├── dom.ts        # patchTitle(setter 拦截)/patchWordmark(注入路径或移除铭牌)/removeHarnessBadge/startWordmarkMasking(observer)/hero 清理
@@ -57,7 +57,7 @@ dsh-sfw/
 
 插件是 **dsh 的双半部插件**,宿主不用改一行代码:
 
-1. **node 半部**(`src/index.ts`):在宿主里以插件行加载(见 §5)。`apply` 里 `ctx.httpServer.tapIndex()` 注册一个 index.html 变换:
+1. **node 半部**(`src/index.ts`):在宿主里以插件行加载(见 §5)。`apply` 里 `ctx.webServer.tapIndex()` 注册一个 index.html 变换:
    - 把 `<title>DeepSeek Harness</title>` 直接改写为 `productName`(JS 加载前标签页就不露馅);
    - 把完整配置以 `<script>window.__DSH_SFW__ = {...}</script>` 注入 `<head>`(与 `__DSH_BOOT__` 同一条注入通道;`<` 转义为 `\u003c`)。
 2. **浏览器半部**(`src/client/`):因为 `package.json` 里声明了 `dsh.client`(2026-08-10 起,dsh 0810 把旧字段 `dshClient` 收进 `dsh` 对象),宿主 `dsh-client-modules` 自动把它编译好的 `lib/client.js` 挂进浏览器加载图(`__DSH_BOOT__` 出现 `@shenjack/dsh-sfw` 行,`/plugins/@shenjack/dsh-sfw/client.js` 提供服务)。浏览器端 cordis 加载该 bundle(要求 CJS + `window.__ModuleLoader__.load({id, factory})` 包装,tsdown 配置已处理),`apply` 启动:
